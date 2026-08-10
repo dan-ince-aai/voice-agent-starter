@@ -281,7 +281,8 @@ async function start() {
     mic = await navigator.mediaDevices.getUserMedia({
       audio: {
         echoCancellation: true,
-        noiseSuppression: true,
+        noiseSuppression: false,
+        autoGainControl: false,
         ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
       },
     });
