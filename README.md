@@ -32,7 +32,7 @@ Then open http://localhost:3000.
 
 ## Make it yours
 
-Each agent in `agents/` is a single readable file. Edit the `SESSION` object at the top for the prompt, greeting, voice, keyterms, and tools, then redeploy. The full session reference lives in the [API docs](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/create-agent).
+Each use case is a JSON file in `config/`: prompt, greeting, voice, keyterms, business identity, and tools with their stubbed results. Edit the JSON and restart; `app.mjs` is the single runtime that serves whatever the config says. The full session reference lives in the [API docs](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/create-agent).
 
 ## A note on cost
 

@@ -1,0 +1,98 @@
+{
+  "title": "Appointment booking",
+  "business": {
+    "label": "Business",
+    "name": "Fern and Field"
+  },
+  "try_hint": "Can I book a cut tomorrow at 2pm?",
+  "session": {
+    "system_prompt": "You book appointments for Fern and Field, a hair salon open Tuesday to Saturday, 9am to 6pm. Collect the caller's full name, phone number, service, and preferred date and time, one at a time, confirming each before moving on. Services: cuts, color, styling, and treatments. Read phone numbers and dates back to the caller to confirm you heard them correctly. If a requested time is outside opening hours, say so and offer the nearest alternative. Check every requested slot with the check_availability tool before offering it. When everything is collected, read the full booking back, confirm, and book it with the book_appointment tool.",
+    "greeting": "You've reached Fern and Field. Would you like to book an appointment?",
+    "input": {
+      "format": {
+        "encoding": "audio/pcm",
+        "sample_rate": 24000
+      },
+      "keyterms": [
+        "Fern and Field"
+      ]
+    },
+    "output": {
+      "voice": "mary",
+      "format": {
+        "encoding": "audio/pcm",
+        "sample_rate": 24000
+      }
+    }
+  },
+  "tools": [
+    {
+      "type": "function",
+      "name": "check_availability",
+      "description": "Check whether a requested appointment slot is free. Call before offering or confirming any time.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "Requested date, e.g. 2026-08-14."
+          },
+          "time": {
+            "type": "string",
+            "description": "Requested time, e.g. 14:30."
+          }
+        },
+        "required": [
+          "date",
+          "time"
+        ]
+      }
+    },
+    {
+      "type": "function",
+      "name": "book_appointment",
+      "description": "Book the confirmed appointment. Call once, after the caller confirms the full read-back.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Caller full name."
+          },
+          "phone_number": {
+            "type": "string",
+            "description": "Caller phone number, digits only."
+          },
+          "service": {
+            "type": "string",
+            "description": "Requested service."
+          },
+          "date": {
+            "type": "string",
+            "description": "Booked date."
+          },
+          "time": {
+            "type": "string",
+            "description": "Booked time."
+          }
+        },
+        "required": [
+          "name",
+          "phone_number",
+          "service",
+          "date",
+          "time"
+        ]
+      }
+    }
+  ],
+  "tool_results": {
+    "check_availability": {
+      "available": true
+    },
+    "book_appointment": {
+      "confirmed": true,
+      "reference": "FF-2481"
+    }
+  }
+}

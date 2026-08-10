@@ -8,6 +8,35 @@
 // tokens, which is the same auth pattern you should ship to production.
 
 import http from 'node:http'
+import { readFileSync } from 'node:fs'
+
+// Everything about the agent lives in config/<use-case>.json: prompt,
+// greeting, voice, keyterms, tools, and their stubbed results. Edit the
+// JSON, restart, done.
+const USE_CASE = process.env.USE_CASE || 'receptionist'
+const CONFIG = JSON.parse(
+  readFileSync(new URL(`./config/${USE_CASE}.json`, import.meta.url), 'utf8')
+)
+const PERSONA = CONFIG.session.output.voice.replace(/^./, (c) => c.toUpperCase())
+const VOICE_LABELS = [
+  ['alba', '🇺🇸 alba'], ['anna', '🇺🇸 anna'], ['charles', '🇺🇸 charles'],
+  ['eve', '🇺🇸 eve'], ['george', '🇺🇸 george'], ['jane', '🇺🇸 jane'],
+  ['jean', '🇺🇸 jean'], ['mary', '🇺🇸 mary'], ['michael', '🇺🇸 michael'],
+  ['paul', '🇬🇧 paul'], ['vera', '🇬🇧 vera'], ['giovanni', '🇮🇹 giovanni · Italian'],
+  ['lola', '🇪🇸 lola · Spanish'], ['juergen', '🇩🇪 juergen · German'],
+  ['rafael', '🇵🇹 rafael · Portuguese'], ['estelle', '🇫🇷 estelle · French'],
+]
+const VOICE_OPTIONS = VOICE_LABELS.map(
+  ([id, label]) =>
+    `<option value="${id}"${id === CONFIG.session.output.voice ? ' selected' : ''}>${label}</option>`
+).join('\n          ')
+const CLIENT_CONFIG = JSON.stringify({
+  business: CONFIG.business ?? null,
+  session: CONFIG.session,
+  tools: CONFIG.tools,
+  tool_results: CONFIG.tool_results,
+}).replace(/</g, '\\u003c')
+
 
 const API_KEY = process.env.ASSEMBLYAI_API_KEY ?? '<YOUR_API_KEY>'
 // Uses PORT when set; otherwise starts at 3000 and hops to the next free
@@ -20,108 +49,22 @@ let port = Number(process.env.PORT) || 3000
 function clientApp() {
 const $ = (id) => document.getElementById(id);
 const RATE = 24_000;
+const CFG = window.AGENT_CONFIG;
 
 // Stubbed tool results: swap these for real backend calls. Tools without
 // an entry here get { status: "ok" }.
-const TOOL_RESULTS = {
-  "check_availability": {
-    "available": true
-  },
-  "book_appointment": {
-    "confirmed": true,
-    "reference": "FF-2481"
-  }
-};
+const TOOL_RESULTS = CFG.tool_results;
 // Simulated backend latency before each stub result. Long enough to hear
 // the agent narrate the wait; a real integration replaces the wait entirely.
 const SIMULATED_TOOL_LATENCY_MS = 3000;
 
 // Tools the agent can call. Stub answers come from TOOL_RESULTS above.
-const TOOLS = [
-  {
-    "type": "function",
-    "name": "check_availability",
-    "description": "Check whether a requested appointment slot is free. Call before offering or confirming any time.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "date": {
-          "type": "string",
-          "description": "Requested date, e.g. 2026-08-14."
-        },
-        "time": {
-          "type": "string",
-          "description": "Requested time, e.g. 14:30."
-        }
-      },
-      "required": [
-        "date",
-        "time"
-      ]
-    }
-  },
-  {
-    "type": "function",
-    "name": "book_appointment",
-    "description": "Book the confirmed appointment. Call once, after the caller confirms the full read-back.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string",
-          "description": "Caller full name."
-        },
-        "phone_number": {
-          "type": "string",
-          "description": "Caller phone number, digits only."
-        },
-        "service": {
-          "type": "string",
-          "description": "Requested service."
-        },
-        "date": {
-          "type": "string",
-          "description": "Booked date."
-        },
-        "time": {
-          "type": "string",
-          "description": "Booked time."
-        }
-      },
-      "required": [
-        "name",
-        "phone_number",
-        "service",
-        "date",
-        "time"
-      ]
-    }
-  }
-];
+const TOOLS = CFG.tools;
 
 // --- Agent definition: edit this, save, refresh ---------------------------
 // Every field the session accepts is documented here:
 // https://www.assemblyai.com/docs/voice-agents/voice-agent-api/create-agent
-const SESSION = {
-  system_prompt: `You book appointments for Fern and Field, a hair salon open Tuesday to Saturday, 9am to 6pm. Collect the caller's full name, phone number, service, and preferred date and time, one at a time, confirming each before moving on. Services: cuts, color, styling, and treatments. Read phone numbers and dates back to the caller to confirm you heard them correctly. If a requested time is outside opening hours, say so and offer the nearest alternative. Check every requested slot with the check_availability tool before offering it. When everything is collected, read the full booking back, confirm, and book it with the book_appointment tool.`,
-  greeting: `You've reached Fern and Field. Would you like to book an appointment?`,
-  input: {
-    format: { encoding: 'audio/pcm', sample_rate: 24000 },
-    keyterms: ["Fern and Field"],
-    // Turn taking, languages, transcription tuning, noise suppression:
-    // https://www.assemblyai.com/docs/voice-agents/voice-agent-api/turn-detection-and-interruptions
-    // turn_detection: { min_silence: 200, max_silence: 1200 },
-  },
-  output: {
-    // Voice catalog: https://www.assemblyai.com/docs/voice-agents/voice-agent-api/voices
-    voice: 'mary',
-    format: { encoding: 'audio/pcm', sample_rate: 24000 },
-  },
-  // The agent calls these mid-conversation; this app answers with the
-  // stubbed TOOL_RESULTS above. Swap those for real backend calls.
-  // https://www.assemblyai.com/docs/voice-agents/voice-agent-api/tools/overview
-  tools: TOOLS,
-};
+const SESSION = CFG.session;
 
 // Inline AudioWorklet: captures mic as PCM16 and posts to main thread
 const workletUrl = URL.createObjectURL(new Blob([`
@@ -187,8 +130,8 @@ function outputNode() {
   return phoneChain;
 }
 // --- Lite setup: what the sheet above the call button edits ---------------
-const BUSINESS = 'Fern and Field';
-$('bizname').value = BUSINESS;
+const BUSINESS = CFG.business ? CFG.business.name : null;
+if (BUSINESS) $('bizname').value = BUSINESS;
 $('greeting').value = SESSION.greeting;
 $('voice').value = SESSION.output.voice;
 
@@ -210,11 +153,13 @@ refreshPersona();
 
 let greetingEdited = false;
 $('greeting').addEventListener('input', () => { greetingEdited = true; });
-$('bizname').addEventListener('input', () => {
-  if (greetingEdited) return;
-  const name = $('bizname').value.trim() || BUSINESS;
-  $('greeting').value = SESSION.greeting.split(BUSINESS).join(name);
-});
+if (BUSINESS) {
+  $('bizname').addEventListener('input', () => {
+    if (greetingEdited) return;
+    const name = $('bizname').value.trim() || BUSINESS;
+    $('greeting').value = SESSION.greeting.split(BUSINESS).join(name);
+  });
+}
 
 const enabledTools = new Set(TOOLS.map((tool) => tool.name));
 TOOLS.forEach((tool) => {
@@ -234,8 +179,8 @@ TOOLS.forEach((tool) => {
 if (!TOOLS.length) $('caps-fld').hidden = true;
 
 function buildSession() {
-  const name = $('bizname').value.trim() || BUSINESS;
-  const swap = (text) => text.split(BUSINESS).join(name);
+  const name = BUSINESS ? ($('bizname').value.trim() || BUSINESS) : null;
+  const swap = (text) => (name ? text.split(BUSINESS).join(name) : text);
   return {
     ...SESSION,
     system_prompt: swap(SESSION.system_prompt),
@@ -551,7 +496,7 @@ const HTML = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Appointment booking · AssemblyAI</title>
+  <title>${CONFIG.title} · AssemblyAI</title>
   <style>
     :root {
       --paper: #F6F4EE; --panel: #FBFAF6; --ink: #17171B;
@@ -805,7 +750,7 @@ const HTML = `<!DOCTYPE html>
   <a class="logo" href="https://www.assemblyai.com">
     <img src="https://cdn.prod.website-files.com/67a08d9d7d19f8fb63692894/67b5bd3d9e8ee1a6b2410b9e_AssemblyAI%20Logo.svg" alt="AssemblyAI">
   </a>
-  <span class="page-title">Appointment booking · Voice Agent API</span>
+  <span class="page-title">${CONFIG.title} · Voice Agent API</span>
   <div class="header-spacer"></div>
   <div class="status" id="status"><span class="dot"></span><span id="status-text">Ready</span></div>
 </header>
@@ -814,19 +759,19 @@ const HTML = `<!DOCTYPE html>
   <div class="cols">
     <section class="deskcard">
       <div class="persona" id="persona">
-        <div class="monogram" id="monogram">M</div>
+        <div class="monogram" id="monogram">${PERSONA.charAt(0)}</div>
         <div>
-          <div class="persona-name" id="persona-name">Mary</div>
+          <div class="persona-name" id="persona-name">${PERSONA}</div>
           <div class="persona-state" id="persona-state">Off the line</div>
         </div>
       </div>
       <div class="deskrule"></div>
       <div class="sheet">
-        <div class="fld">
-          <span class="flt">Business</span>
-          <input id="bizname" spellcheck="false" autocomplete="off" aria-label="Business name">
+${CONFIG.business ? `        <div class="fld">
+          <span class="flt">${CONFIG.business.label}</span>
+          <input id="bizname" spellcheck="false" autocomplete="off" aria-label="${CONFIG.business.label} name">
         </div>
-        <div class="fld">
+` : ''}        <div class="fld">
           <span class="flt">Answers with</span>
           <input id="greeting" spellcheck="false" autocomplete="off" aria-label="Greeting">
         </div>
@@ -838,26 +783,11 @@ const HTML = `<!DOCTYPE html>
           <div class="fld">
             <span class="flt">Voice</span>
             <select id="voice" aria-label="Voice">
-              <option value="alba">🇺🇸 alba</option>
-          <option value="anna">🇺🇸 anna</option>
-          <option value="charles">🇺🇸 charles</option>
-          <option value="eve">🇺🇸 eve</option>
-          <option value="george">🇺🇸 george</option>
-          <option value="jane">🇺🇸 jane</option>
-          <option value="jean">🇺🇸 jean</option>
-          <option value="mary" selected>🇺🇸 mary</option>
-          <option value="michael">🇺🇸 michael</option>
-          <option value="paul">🇬🇧 paul</option>
-          <option value="vera">🇬🇧 vera</option>
-          <option value="giovanni">🇮🇹 giovanni · Italian</option>
-          <option value="lola">🇪🇸 lola · Spanish</option>
-          <option value="juergen">🇩🇪 juergen · German</option>
-          <option value="rafael">🇵🇹 rafael · Portuguese</option>
-          <option value="estelle">🇫🇷 estelle · French</option>
+              ${VOICE_OPTIONS}
             </select>
           </div>
         </div>
-        <div class="sheet-note">Type over any field &middot; click a chip to give or take a tool &middot; applies to the next call</div>
+        <div class="sheet-note">${CONFIG.tools.length ? 'Type over any field &middot; click a chip to give or take a tool &middot; applies to the next call' : 'Type over any field &middot; applies to the next call'}</div>
       </div>
       <div class="deskrule"></div>
       <div class="callpad">
@@ -886,13 +816,13 @@ const HTML = `<!DOCTYPE html>
           <span>Call log<span id="call-dur"></span></span>
           <div class="speakers">
             <div class="speaker user" id="spk-user"><span class="dot"></span>Caller</div>
-            <div class="speaker agent" id="spk-agent"><span class="dot"></span><span id="spk-agent-name">Mary</span></div>
+            <div class="speaker agent" id="spk-agent"><span class="dot"></span><span id="spk-agent-name">${PERSONA}</span></div>
           </div>
         </div>
         <div id="msgs">
           <div class="empty" id="empty-msg">
             <span class="try">Try</span>
-            <span class="hint">Can I book a cut tomorrow at 2pm?</span>
+            <span class="hint">${CONFIG.try_hint}</span>
           </div>
         </div>
       </div>
@@ -903,7 +833,8 @@ const HTML = `<!DOCTYPE html>
     <span>Everything else lives in code &middot; edit <b>SESSION</b> in <b>agent.mjs</b></span>
     <a class="configlink" href="https://www.assemblyai.com/docs/voice-agents/voice-agent-api/create-agent" target="_blank" rel="noreferrer">API reference</a>
   </div>
-</main><script src="/app.js"></script>
+</main><script>window.AGENT_CONFIG = ${CLIENT_CONFIG}</script>
+<script src="/app.js"></script>
 </body>
 </html>`
 

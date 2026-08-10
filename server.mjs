@@ -3,8 +3,8 @@
 //
 //   ASSEMBLYAI_API_KEY=... USE_CASE=receptionist node server.mjs
 //
-// Each agent in agents/ is a complete one-file app; this just selects one,
-// so a single deploy button can serve any use case.
+// The agent itself is app.mjs; its behavior comes entirely from
+// config/<use-case>.json, so a single deploy button serves any use case.
 
 const USE_CASES = [
   'receptionist',
@@ -28,4 +28,4 @@ if (!process.env.ASSEMBLYAI_API_KEY) {
   process.exit(1)
 }
 
-await import(`./agents/${useCase}.mjs`)
+await import('./app.mjs')
