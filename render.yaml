@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: voice-agent
+    runtime: node
+    plan: free
+    buildCommand: 'true'
+    startCommand: node server.mjs
+    envVars:
+      - key: ASSEMBLYAI_API_KEY
+        sync: false
+      - key: USE_CASE
+        value: receptionist

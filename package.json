@@ -1,0 +1,13 @@
+{
+  "name": "voice-agent-starter",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "One-click deployable voice agent built on the AssemblyAI Voice Agent API",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.mjs"
+  }
+}
