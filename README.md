@@ -14,11 +14,11 @@ Pick a use case with the `USE_CASE` env var:
 
 ## Deploy
 
-You need an [AssemblyAI API key](https://www.assemblyai.com/dashboard). Both providers prompt for it during setup; it stays server-side.
-
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template?template=https://github.com/dan-ince-aai/voice-agent-starter)
+You need an [AssemblyAI API key](https://www.assemblyai.com/dashboard). Render prompts for it during setup; it stays server-side.
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/dan-ince-aai/voice-agent-starter)
+
+Railway deploys published templates rather than repo links; publish this repo as a template from your Railway workspace to get a button for it.
 
 Once it's live, open the URL and start the call. Share the link with anyone; they talk to your agent from the browser, and your API key never reaches the page.
 
