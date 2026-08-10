@@ -802,7 +802,7 @@ ${CONFIG.business ? `        <div class="fld">
         <div class="callmeta">
           <label class="phoneline">
             <input type="checkbox" id="phoneline">
-            <span>Phone line</span>
+            <span>Simulate phone</span>
           </label>
           <select id="mic" aria-label="Microphone"><option value="">Default microphone</option></select>
         </div>
