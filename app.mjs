@@ -22,7 +22,11 @@ const CONFIG = AGENT_ID
   ? await (async () => {
       const res = await fetch(
         `https://agents.assemblyai.com/v1/agents/${AGENT_ID}`,
-        { headers: { Authorization: `Bearer ${API_KEY}` } }
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.ASSEMBLYAI_API_KEY}`,
+          },
+        }
       )
       if (!res.ok) {
         console.error(`Could not fetch agent ${AGENT_ID}: ${res.status}`)
