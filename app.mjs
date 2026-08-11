@@ -14,9 +14,44 @@ import { readFileSync } from 'node:fs'
 // greeting, voice, keyterms, tools, and their stubbed results. Edit the
 // JSON, restart, done.
 const USE_CASE = process.env.USE_CASE || 'receptionist'
-const CONFIG = JSON.parse(
-  readFileSync(new URL(`./config/${USE_CASE}.json`, import.meta.url), 'utf8')
-)
+// AGENT_ID connects to an agent that already exists on your account (for
+// example one you shaped in the playground); otherwise the agent is defined
+// by config/<use-case>.json and registered on boot.
+const AGENT_ID = process.env.AGENT_ID || ''
+const CONFIG = AGENT_ID
+  ? await (async () => {
+      const res = await fetch(
+        `https://agents.assemblyai.com/v1/agents/${AGENT_ID}`,
+        { headers: { Authorization: `Bearer ${API_KEY}` } }
+      )
+      if (!res.ok) {
+        console.error(`Could not fetch agent ${AGENT_ID}: ${res.status}`)
+        process.exit(1)
+      }
+      const agent = await res.json()
+      return {
+        title: agent.name || 'Your agent',
+        business: null,
+        try_hint: 'Say hi.',
+        session: {
+          system_prompt: agent.system_prompt || '',
+          greeting: agent.greeting || '',
+          input: {
+            format: { encoding: 'audio/pcm', sample_rate: 24000 },
+            keyterms: agent.input?.keyterms ?? [],
+          },
+          output: {
+            voice: agent.voice?.voice_id || 'anna',
+            format: { encoding: 'audio/pcm', sample_rate: 24000 },
+          },
+        },
+        tools: agent.tools ?? [],
+        tool_results: {},
+      }
+    })()
+  : JSON.parse(
+      readFileSync(new URL(`./config/${USE_CASE}.json`, import.meta.url), 'utf8')
+    )
 const PERSONA = CONFIG.session.output.voice.replace(/^./, (c) => c.toUpperCase())
 const VOICE_LABELS = [
   ['alba', '🇺🇸 alba'], ['anna', '🇺🇸 anna'], ['charles', '🇺🇸 charles'],
@@ -905,8 +940,10 @@ const server = http.createServer(async (req, res) => {
     req.on('data', (chunk) => (body += chunk))
     req.on('end', async () => {
       try {
+        // In AGENT_ID mode the agent is managed elsewhere (your dashboard,
+        // your code); the app connects to it as-is.
         const overrides = JSON.parse(body || '{}')
-        const id = await ensureAgent(agentDefinition(overrides))
+        const id = AGENT_ID || (await ensureAgent(agentDefinition(overrides)))
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ agent_id: id }))
       } catch (err) {
@@ -949,8 +986,12 @@ server.on('listening', () => {
 
 // Register the stored agent up front so the first call connects instantly;
 // sheet edits re-sync it through POST /agent.
-ensureAgent(agentDefinition())
-  .then((id) => console.log(`Stored agent ready: ${id}`))
-  .catch((err) => console.error(`Could not register the agent: ${err}`))
+if (AGENT_ID) {
+  console.log(`Connecting to your agent: ${AGENT_ID} (${CONFIG.title})`)
+} else {
+  ensureAgent(agentDefinition())
+    .then((id) => console.log(`Stored agent ready: ${id}`))
+    .catch((err) => console.error(`Could not register the agent: ${err}`))
+}
 
 server.listen(port)
