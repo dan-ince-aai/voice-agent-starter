@@ -8,9 +8,9 @@ Pick a use case with the `USE_CASE` env var:
 | --- | --- |
 | `receptionist` (default) | Inbound receptionist for a dental practice |
 | `appointment-booking` | Salon booking with availability checks |
-| `order-taking` | Pizza orders with a read-back total |
+| `pharmacist` | Pharmacy refills and pickups, hears drug names right |
 | `interview-screener` | Structured phone screen |
-| `general` | Open-ended assistant, the blank canvas |
+| `web-research` | Looks things up on the live web while you talk |
 
 ## Deploy
 

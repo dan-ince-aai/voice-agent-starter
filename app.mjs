@@ -30,6 +30,51 @@ const VOICE_OPTIONS = VOICE_LABELS.map(
   ([id, label]) =>
     `<option value="${id}"${id === CONFIG.session.output.voice ? ' selected' : ''}>${label}</option>`
 ).join('\n          ')
+// The agent lives server-side as a stored resource: created on boot from
+// the config, re-synced when the sheet edits it, and referenced by id when
+// sessions connect. HTTP tools only work on stored agents.
+const agentDefinition = (overrides = {}) => {
+  const business = CONFIG.business ? CONFIG.business.name : null
+  const name = overrides.business_name || business
+  const swap = (text) =>
+    business && name ? text.split(business).join(name) : text
+  const tools = (CONFIG.tools ?? []).filter(
+    (tool) => !overrides.tools || overrides.tools.includes(tool.name)
+  )
+  return {
+    name: `${CONFIG.title} (starter)`,
+    system_prompt: swap(CONFIG.session.system_prompt),
+    greeting: overrides.greeting || swap(CONFIG.session.greeting),
+    voice: { voice_id: overrides.voice || CONFIG.session.output.voice },
+    input: {
+      format: { encoding: 'audio/pcm', sample_rate: 24000 },
+      ...(CONFIG.session.input.keyterms?.length
+        ? { keyterms: CONFIG.session.input.keyterms.map(swap) }
+        : {}),
+    },
+    output: { format: { encoding: 'audio/pcm', sample_rate: 24000 } },
+    ...(tools.length ? { tools } : {}),
+  }
+}
+
+async function ensureAgent(config) {
+  const headers = {
+    Authorization: `Bearer ${API_KEY}`,
+    'Content-Type': 'application/json',
+  }
+  const list = await (
+    await fetch('https://agents.assemblyai.com/v1/agents', { headers })
+  ).json()
+  const existing = (list.agents ?? []).find((a) => a.name === config.name)
+  const res = await fetch(
+    'https://agents.assemblyai.com/v1/agents' +
+      (existing ? '/' + existing.id : ''),
+    { method: existing ? 'PUT' : 'POST', headers, body: JSON.stringify(config) }
+  )
+  if (!res.ok) throw new Error('agent sync failed: ' + res.status)
+  return existing ? existing.id : (await res.json()).id
+}
+
 const CLIENT_CONFIG = JSON.stringify({
   business: CONFIG.business ?? null,
   session: CONFIG.session,
@@ -178,19 +223,15 @@ TOOLS.forEach((tool) => {
 });
 if (!TOOLS.length) $('caps-fld').hidden = true;
 
-function buildSession() {
+function buildOverrides() {
   const name = BUSINESS ? ($('bizname').value.trim() || BUSINESS) : null;
-  const swap = (text) => (name ? text.split(BUSINESS).join(name) : text);
   return {
-    ...SESSION,
-    system_prompt: swap(SESSION.system_prompt),
-    greeting: $('greeting').value.trim() || swap(SESSION.greeting),
-    input: {
-      ...SESSION.input,
-      keyterms: (SESSION.input.keyterms ?? []).map(swap),
-    },
-    output: { ...SESSION.output, voice: $('voice').value },
-    tools: TOOLS.filter((tool) => enabledTools.has(tool.name)),
+    business_name: name,
+    greeting: $('greeting').value.trim(),
+    voice: $('voice').value,
+    tools: TOOLS.filter((tool) => enabledTools.has(tool.name)).map(
+      (tool) => tool.name
+    ),
   };
 }
 
@@ -263,7 +304,19 @@ async function start() {
   setPersona('Ringing…', 'live');
 
   try {
-    // Session token from our own server; the API key never reaches the page.
+    // Sync the sheet edits into the stored agent, then fetch a session
+    // token; the API key never reaches the page.
+    const agentRes = await fetch('/agent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(buildOverrides()),
+    });
+    if (!agentRes.ok) {
+      setStatus('Could not sync the agent (check the API key)', 'err');
+      resetUI();
+      return;
+    }
+    const { agent_id } = await agentRes.json();
     const tokenRes = await fetch('/token');
     if (!tokenRes.ok) {
       setStatus('Could not mint a session token (check the API key)', 'err');
@@ -307,7 +360,7 @@ async function start() {
 
     ws.onopen = () => ws.send(JSON.stringify({
       type: 'session.update',
-      session: buildSession(),
+      session: { agent_id },
     }));
 
     ws.onmessage = ({ data }) => {
@@ -380,6 +433,12 @@ async function start() {
         case 'tool.call': {
           const args = typeof m.arguments === 'string'
             ? m.arguments : JSON.stringify(m.arguments);
+          const toolDef = TOOLS.find((tool) => tool.name === m.name);
+          if (toolDef && toolDef.http) {
+            // Server-executed HTTP tool: the API calls the endpoint itself.
+            addMsg('Tool', m.name + ' ' + args, 't');
+            break;
+          }
           const line = addMsg('Tool', m.name + ' ' + args, 't');
           const runEl = document.createElement('span');
           runEl.className = 'run';
@@ -841,6 +900,22 @@ ${CONFIG.business ? `        <div class="fld">
 
 // --- server ----------------------------------------------------------------
 const server = http.createServer(async (req, res) => {
+  if (req.url === '/agent' && req.method === 'POST') {
+    let body = ''
+    req.on('data', (chunk) => (body += chunk))
+    req.on('end', async () => {
+      try {
+        const overrides = JSON.parse(body || '{}')
+        const id = await ensureAgent(agentDefinition(overrides))
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ agent_id: id }))
+      } catch (err) {
+        res.writeHead(502, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: String(err) }))
+      }
+    })
+    return
+  }
   if (req.url === '/token') {
     const upstream = await fetch(
       'https://agents.assemblyai.com/v1/token?product=voice_agent&expires_in_seconds=60',
@@ -869,7 +944,13 @@ server.on('error', (err) => {
 })
 
 server.on('listening', () => {
-  console.log(`Voice agent running → http://localhost:${port}`)
+  console.log(`Voice agent running: http://localhost:${port}`)
 })
+
+// Register the stored agent up front so the first call connects instantly;
+// sheet edits re-sync it through POST /agent.
+ensureAgent(agentDefinition())
+  .then((id) => console.log(`Stored agent ready: ${id}`))
+  .catch((err) => console.error(`Could not register the agent: ${err}`))
 
 server.listen(port)

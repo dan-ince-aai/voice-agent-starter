@@ -7,11 +7,11 @@
 // config/<use-case>.json, so a single deploy button serves any use case.
 
 const USE_CASES = [
+  'web-research',
   'receptionist',
-  'general',
   'interview-screener',
   'appointment-booking',
-  'order-taking',
+  'pharmacist',
 ]
 
 const useCase = process.env.USE_CASE || 'receptionist'

@@ -8,7 +8,7 @@ This is a dependency-free Node starter for the AssemblyAI Voice Agent API. `serv
 ASSEMBLYAI_API_KEY=<key> USE_CASE=receptionist node server.mjs
 ```
 
-Node 18+, no installs. `PORT` is respected (defaults to 3000 and hops if busy). Use cases: `receptionist`, `general`, `interview-screener`, `appointment-booking`, `order-taking`.
+Node 18+, no installs. `PORT` is respected (defaults to 3000 and hops if busy). Use cases: `web-research`, `receptionist`, `interview-screener`, `appointment-booking`, `pharmacist`.
 
 ## Architecture
 
