@@ -3,11 +3,7 @@
 //
 //   npm start
 //
-// Serves one page with a call button, mints short-lived session tokens, and
-// streams the microphone to the agent. There is nothing to configure here:
-// the agent is whatever agents/<name>.jsonc says, or whatever AGENT_ID points
-// at. Your API key stays in this process; the page only ever gets a
-// 60-second token.
+// The API key stays in this process; the page only gets 60-second tokens.
 
 import http from 'node:http'
 import { aai, loadEnv, publishAgent, readAgent, required } from '../../lib.mjs'
@@ -15,9 +11,7 @@ import { aai, loadEnv, publishAgent, readAgent, required } from '../../lib.mjs'
 loadEnv()
 required('ASSEMBLYAI_API_KEY', 'get one at https://www.assemblyai.com/dashboard/api-keys')
 
-// AGENT_ID set means the agent is managed elsewhere, by `npm run publish` or
-// the AssemblyAI dashboard, so connect to it as it is. Unset means publish
-// the agent file now and remember the id it gets.
+// AGENT_ID set means the agent is managed elsewhere, so use it as it is.
 const AGENT = await (async () => {
   if (process.env.AGENT_ID) {
     try {
@@ -43,18 +37,15 @@ const AGENT = await (async () => {
 console.log(`Agent: ${AGENT.id}`)
 
 // --- client ----------------------------------------------------------------
-// Served as /app.js. The server stringifies this function, so what you read
-// here is what the page runs.
+// Stringified and served as /app.js.
 function clientApp() {
 const $ = (id) => document.getElementById(id)
-// The rate the API speaks. Both worklets resample to and from it, because a
-// browser is allowed to ignore the sample rate an AudioContext asks for.
+// The rate the API speaks. Both worklets resample, since a browser may
+// ignore the rate an AudioContext asks for.
 const WIRE_RATE = 24_000
 const AGENT = window.AGENT
 
-// Reads the mic, resamples to the wire rate, and posts PCM16 to the main
-// thread. Allocations on the audio thread cause glitches, so the scratch
-// buffers are reused and only the transferred buffer is per block.
+// Scratch buffers are reused: allocating on the audio thread causes glitches.
 const CAPTURE_WORKLET = `
   class CaptureProcessor extends AudioWorkletProcessor {
     constructor() {
@@ -110,10 +101,8 @@ const CAPTURE_WORKLET = `
   registerProcessor('capture', CaptureProcessor);
 `
 
-// Plays reply audio out of a ring buffer. Scheduling one AudioBufferSource per
-// arriving chunk drifts and clicks when the network jitters; a ring buffer the
-// audio thread drains at its own pace does not. Posting 'stop' empties it,
-// which is how barge-in cuts the agent off mid-word.
+// A ring buffer rather than one AudioBufferSource per chunk, which drifts and
+// clicks under jitter. Posting 'stop' empties it for barge-in.
 const PLAYBACK_WORKLET = `
   class PlaybackProcessor extends AudioWorkletProcessor {
     constructor() {
@@ -125,10 +114,8 @@ const PLAYBACK_WORKLET = `
       this._step = ${WIRE_RATE} / sampleRate;
       this._rsPos = 0;
       this._rsPrev = 0;
-      // Set when the buffer runs dry. The speaker is then sitting at zero
-      // while _rsPrev still holds the sample from before the gap, so
-      // interpolating from it on the next chunk steps straight to that value
-      // and clicks. Reset instead.
+      // After a gap the speaker sits at zero, so interpolating from the
+      // pre-gap _rsPrev would click. Reset it instead.
       this._drained = false;
       this.port.onmessage = (e) => {
         if (e.data === 'stop') {
@@ -137,8 +124,7 @@ const PLAYBACK_WORKLET = `
           return;
         }
         const int16 = new Int16Array(e.data);
-        // An empty frame would leave _rsPrev as int16[-1], and one NaN in the
-        // ring silences everything after it.
+        // int16[-1] would make _rsPrev NaN, silencing the ring for good.
         if (!int16.length) return;
         if (this._drained) {
           this._rsPrev = 0;
@@ -184,8 +170,7 @@ const PLAYBACK_WORKLET = `
           this._drained = true;
         }
       }
-      // Mono source, stereo sink: copy into the other channels so one ear
-      // isn't silent.
+      // Mono source, stereo sink.
       for (let ch = 1; ch < output.length; ch++) output[ch].set(out);
       return true;
     }
@@ -199,16 +184,14 @@ const blobUrl = (code) =>
 let ws, captureCtx, playbackCtx, playback, mic, callStart, timer
 
 // --- microphones ---
-// Labels stay empty until the page has held mic permission once, so this runs
-// again after getUserMedia and on every device change.
+// Labels stay empty until mic permission is granted, so this runs again after
+// getUserMedia.
 async function listMics() {
   if (!navigator.mediaDevices?.enumerateDevices) return
   const devices = await navigator.mediaDevices.enumerateDevices()
   const inputs = devices
     .filter((device) => device.kind === 'audioinput')
-    // Chrome reports synthetic "default" and "communications" entries that
-    // point at whichever real device is current, which shows the same
-    // microphone twice. The explicit option below covers that case.
+    // Chrome's synthetic entries alias a real device and duplicate it.
     .filter((device) => device.deviceId !== 'default' && device.deviceId !== 'communications')
   const select = $('mic')
   const chosen = select.value
@@ -235,7 +218,6 @@ $('log-toggle').onclick = () => {
 }
 
 // --- side pane tabs ---
-// The agent config is fetched once, the first time the tab is opened.
 let agentLoaded = false
 
 function showTab(name) {
@@ -287,9 +269,7 @@ async function start() {
     }
     const { token } = await res.json()
 
-    // Two contexts: capture can be torn down without touching playback, and
-    // a stall in one does not stall the other. Created inside the click
-    // handler so Safari allows them to start.
+    // Two contexts, created in the click handler so Safari starts them.
     captureCtx = new AudioContext({ sampleRate: WIRE_RATE })
     playbackCtx = new AudioContext({ sampleRate: WIRE_RATE })
     await Promise.all([captureCtx.resume(), playbackCtx.resume()])
@@ -300,8 +280,7 @@ async function start() {
     const deviceId = $('mic').value
     mic = await navigator.mediaDevices.getUserMedia({
       audio: {
-        // A plain deviceId is a preference, so an unplugged headset falls
-        // back to the default input instead of throwing.
+        // A preference, not `exact`: an unplugged device falls back.
         ...(deviceId ? { deviceId } : {}),
         channelCount: 1,
         echoCancellation: true,
@@ -309,7 +288,6 @@ async function start() {
         autoGainControl: false,
       },
     })
-    // Device labels only become readable once permission is granted.
     listMics()
     const capture = await addWorklet(captureCtx, CAPTURE_WORKLET, 'capture')
     captureCtx.createMediaStreamSource(mic).connect(capture)
@@ -319,8 +297,7 @@ async function start() {
     ws = new WebSocket(url)
     let ready = false
 
-    // The API takes audio as base64 inside JSON, so each block is encoded
-    // here rather than sent as a binary frame.
+    // The API takes base64 inside JSON, not binary frames.
     capture.port.onmessage = ({ data }) => {
       if (!ready || ws.readyState !== 1) return
       const bytes = new Uint8Array(data)
@@ -380,16 +357,21 @@ async function start() {
           logEvent('down', msg.type, msg.status)
           break
 
-        // text carries the full transcript so far, so it replaces the partial.
+        // text is the full transcript so far, so it replaces.
         case 'transcript.user.delta':
           partial('you', msg.text)
           logEvent('down', msg.type, msg.text)
           break
 
-        // delta carries the next word only, so it appends.
+        // delta is the next word only, so it appends.
         case 'transcript.agent.delta':
-          partial('agent', (partialText.agent || '') + msg.delta)
           logEvent('down', msg.type, msg.delta)
+          if (msg.reply_id && msg.reply_id === printedReply) break
+          if (msg.reply_id !== liveReply) {
+            liveReply = msg.reply_id
+            dropPartial('agent')
+          }
+          partial('agent', appendDelta(partialText.agent || '', msg.delta))
           break
 
         case 'transcript.user':
@@ -398,14 +380,13 @@ async function start() {
           break
 
         case 'transcript.agent':
+          printedReply = msg.reply_id ?? printedReply
           addLine('agent', msg.text)
           logEvent('down', msg.type, msg.text)
           break
 
         case 'tool.call': {
-          // Tools with an http block are executed by AssemblyAI, so no result
-          // comes back through this socket. A tool without one is yours to
-          // answer with a tool.result message.
+          // http tools run on AssemblyAI's side; no result comes back here.
           const args = JSON.stringify(msg.arguments ?? {})
           addLine('tool', `${msg.name}(${args})`)
           logEvent('down', msg.type, `${msg.name} ${args}`)
@@ -436,8 +417,7 @@ async function start() {
 }
 
 function stop() {
-  // Ask for a clean close so the session record ends properly, then fall back
-  // to closing the socket if the acknowledgement never lands.
+  // Close cleanly so the session record ends, falling back to the socket.
   if (ws?.readyState === 1) {
     ws.send(JSON.stringify({ type: 'session.end' }))
     logEvent('up', 'session.end')
@@ -458,7 +438,6 @@ function stop() {
 function reset() {
   clearInterval(timer)
   clearPartials()
-  // Close any counting rows so the next call starts new ones.
   open.forEach((run) => paint(run, true))
   open.clear()
   $('btn').disabled = false
@@ -479,10 +458,32 @@ function tick() {
 }
 
 // --- transcript ---
-// Partials stream in while someone is still talking; the final transcript
-// event replaces them.
 const partialText = {}
 const partialEl = {}
+// The full reply arrives once its audio has been sent, which beats the audio
+// playing out, so deltas keep coming after the line is printed. printedReply
+// stops them rebuilding the same sentence underneath it.
+let liveReply = null
+let printedReply = null
+
+// Deltas arrive with a leading space sometimes and without it other times, so
+// add one only when neither side has one and the delta is not punctuation.
+const ATTACHES_LEFT = /^[.,!?;:%°)\]}…'"’”]/
+const NO_SPACE_AFTER = /[([{$\-\/'"‘“]$/
+
+function appendDelta(text, delta) {
+  if (!delta) return text
+  if (!text) return delta
+  if (/^\s/.test(delta) || /\s$/.test(text)) return text + delta
+  if (ATTACHES_LEFT.test(delta) || NO_SPACE_AFTER.test(text)) return text + delta
+  return text + ' ' + delta
+}
+
+function dropPartial(who) {
+  partialEl[who]?.remove()
+  delete partialEl[who]
+  delete partialText[who]
+}
 
 function transcriptLine(who, text, cls) {
   const line = document.createElement('div')
@@ -520,28 +521,19 @@ function partial(who, text) {
 
 function addLine(who, text) {
   clearEmpty($('transcript'))
-  if (partialEl[who]) {
-    partialEl[who].remove()
-    delete partialEl[who]
-    delete partialText[who]
-  }
+  dropPartial(who)
   $('transcript').append(transcriptLine(who, text))
   scroll($('transcript'))
 }
 
 function clearPartials() {
-  for (const who of Object.keys(partialEl)) {
-    partialEl[who].remove()
-    delete partialEl[who]
-    delete partialText[who]
-  }
+  for (const who of Object.keys(partialEl)) dropPartial(who)
+  liveReply = printedReply = null
 }
 
 // --- event log ---
-// Audio frames arrive around 190 times a second in each direction, so logging
-// one row each would bury everything worth reading. These types instead hold a
-// row open and count into it. Both directions stream at once, so a row is kept
-// per direction and type rather than merging only with the row above.
+// Audio frames arrive ~190 times a second each way, so these types hold a row
+// open and count into it. Both streams run at once, hence a row per key.
 const COALESCE = new Set([
   'input.audio',
   'reply.audio',
@@ -571,8 +563,7 @@ function eventRow(direction, type, detail) {
   return row
 }
 
-// Repainting on every frame is wasted work, so a counter updates at most ten
-// times a second and once more when the run ends.
+// Ten repaints a second, plus one when the run closes.
 function paint(live, final) {
   const now = performance.now()
   if (!final && now - live.painted < 100) return
@@ -592,13 +583,12 @@ function logEvent(direction, type, detail) {
     paint(live)
     return
   }
-  // Anything that is not audio ends the runs above it, so the next burst
-  // starts a fresh row and the log reads in order.
+  // A real event closes the open runs, so the next burst starts a new row.
   if (!COALESCE.has(type)) {
     open.forEach((run) => paint(run, true))
     open.clear()
   }
-  // Only follow the tail if the reader is already there.
+  // Only follow the tail if the reader is there.
   const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40
   const row = eventRow(direction, type, detail)
   log.append(row)
@@ -786,10 +776,9 @@ const HTML = `<!DOCTYPE html>
 
 // --- server ----------------------------------------------------------------
 
-// The stored agent, for the read-only view in the page. The API already keeps
-// tool header values and llm keys write-only, and these deletes make sure the
-// page never sees them even if that changes. The system prompt is visible, so
-// on a public deployment this route shows it to anyone who opens the page.
+// Read-only view of the stored agent. The API keeps header values and llm keys
+// write-only; these deletes hold even if that changes. The system prompt is in
+// here, so a public deployment shows it to anyone who opens the page.
 function publicAgent(agent) {
   const copy = structuredClone(agent)
   for (const tool of copy.tools ?? []) {
@@ -833,8 +822,7 @@ const server = http.createServer(async (req, res) => {
   res.end(HTML)
 })
 
-// Uses PORT when set; otherwise starts at 3000 and hops to the next free port,
-// since dev machines usually have something on 3000 already.
+// PORT when set, otherwise 3000 and up until one is free.
 let port = Number(process.env.PORT) || 3000
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE' && !process.env.PORT && port < 3010) {
