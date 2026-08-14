@@ -1,4 +1,4 @@
-// The smallest agent that exists. Three fields.
+// The smallest agent worth running. Three required fields and a greeting.
 //
 // Everything you leave out has a default: a managed model, 24 kHz PCM both
 // ways, adaptive turn detection, interruptions. The other files here each
@@ -16,9 +16,10 @@
   "system_prompt": "You are a friendly assistant on a voice call. Keep every reply to one or two short sentences. Answer what was asked, lead with the answer, and skip the preamble. If you don't know something, say so. No exclamation marks.",
 
   // Voice catalog: https://www.assemblyai.com/docs/voice-agents/voice-agent-api/voices
-  "voice": { "voice_id": "anna" }
+  "voice": { "voice_id": "anna" },
 
-  // Optional, and the first thing worth adding: what the agent says the
-  // moment the call connects. Without it, it waits for you to speak.
-  // "greeting": "Hey, what can I do for you?"
+  // The one optional field worth setting every time. Without it the agent
+  // says nothing when the call connects, and silence reads as a broken line.
+  // https://www.assemblyai.com/docs/voice-agents/voice-agent-api/greeting
+  "greeting": "Hey, what can I do for you?"
 }
