@@ -18,7 +18,7 @@ npm run publish         # AGENT=<name> to pick one
 npm start
 ```
 
-Node 18+, no installs. Agents: `minimal`, `keyterms`, `turn-taking`, `byo-llm`, `http-tools`, `exa-search`, `airtable-crm`, `cal-booking`, `dtmf`.
+Node 18+, no installs. Agents: `minimal`, `keyterms`, `turn-taking`, `byo-llm`, `http-tools`, `exa-search`, `airtable-crm`, `cal-booking`, `dtmf` (keypad entry for PCI compliance).
 
 ## How it fits together
 

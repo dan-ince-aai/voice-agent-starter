@@ -60,7 +60,7 @@ Each step checks for existing state first, so the script can be re-run safely. T
 
 The trunk takes ownership of the number. Any Voice webhook configured on the number itself no longer applies.
 
-DTMF only works on a phone call. [dtmf.jsonc](../../agents/dtmf.jsonc) collects digits from the keypad and keeps them out of the transcript, the logs and the model.
+DTMF only works on a phone call. [dtmf.jsonc](../../agents/dtmf.jsonc) collects card digits from the keypad and keeps them out of the transcript, the logs and the model, which is what keeps a payment flow inside PCI compliance.
 
 Twilio bills the inbound minutes and AssemblyAI bills the session, so a live number draws on both accounts.
 

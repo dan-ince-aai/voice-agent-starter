@@ -31,7 +31,7 @@ For credentials, write `${MY_KEY}` anywhere in the file and put the value in `.e
 | [exa-search.jsonc](exa-search.jsonc) | the same mechanism with an API key attached |
 | [airtable-crm.jsonc](airtable-crm.jsonc) | one tool that reads records and one that writes them |
 | [cal-booking.jsonc](cal-booking.jsonc) | two tools used in sequence: check availability, then book |
-| [dtmf.jsonc](dtmf.jsonc) | `dtmf_collected_arguments`, keypad digits the model never sees |
+| [dtmf.jsonc](dtmf.jsonc) | `dtmf_collected_arguments`, for PCI compliance: keypad digits the model never sees |
 
 ## Two things to know
 

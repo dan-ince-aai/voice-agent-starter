@@ -3,8 +3,9 @@
 //
 // The caller types the digits rather than saying them, and "sensitive": true
 // keeps them out of the transcript, the logs and the model while your endpoint
-// still receives the real values. Card numbers are the obvious case; so are
-// account numbers, PINs, and anything you'd rather not have in a recording.
+// still receives the real values. That is what lets a card payment stay inside
+// PCI compliance. The same applies to account numbers, PINs, and anything else
+// you would rather not have in a recording.
 //
 // Needs DTMF_WEBHOOK_URL: your https endpoint. Point it at
 // https://webhook.site/… first to watch the payload land.

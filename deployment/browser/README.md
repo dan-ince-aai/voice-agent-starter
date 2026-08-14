@@ -47,4 +47,8 @@ Everything is in [server.mjs](server.mjs). The client is the `clientApp` functio
 
 ## Hosting
 
-`render.yaml` is configured for one-click deploys. Set `AGENT_ID` there as well, so the deployment connects to your published agent rather than creating its own. Anyone with the URL can start sessions billed to your key.
+`render.yaml` is configured for one-click deploys. Render prompts for `ASSEMBLYAI_API_KEY` during Blueprint creation, since that is the only variable marked `sync: false`, and sets `PORT` itself. `AGENT` and `AGENT_ID` arrive with defaults and are editable under Environment on the service.
+
+With `AGENT_ID` empty the service publishes `AGENT` on boot and updates the agent of that name on later restarts, so restarts do not pile up duplicate agents. Setting `AGENT_ID` to the id in your `.env` is still better: the deployment then serves the same agent you tested locally.
+
+Anyone with the URL can start sessions billed to your key.

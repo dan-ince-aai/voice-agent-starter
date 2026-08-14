@@ -53,17 +53,19 @@ Open http://localhost:3000 and start the call.
 
 ```sh
 # .env
-TWILIO_ACCOUNT_SID=AC...
-TWILIO_AUTH_TOKEN=your_token_here
-TWILIO_PHONE_NUMBER=+15551234567
-TWILIO_TRUNK_DOMAIN=acme-agent.pstn.twilio.com
+TWILIO_ACCOUNT_SID=AC...                          # console.twilio.com, top of the page
+TWILIO_AUTH_TOKEN=your_token_here                 # same place, hidden until you click it
+TWILIO_PHONE_NUMBER=+15551234567                  # a number already in your account, E.164
+TWILIO_TRUNK_DOMAIN=acme-agent.pstn.twilio.com    # a name you invent, must end .pstn.twilio.com
 ```
+
+The trunk domain does not exist yet. You are naming the SIP trunk that gets created for you, and the name has to be unique across all of Twilio, so put something specific to you in front of `.pstn.twilio.com`. The phone number does have to exist already: buy one under Phone Numbers in the Twilio console first.
 
 ```sh
 npm run phone
 ```
 
-Then call the number. Details in [deployment/telephony](deployment/telephony/).
+This creates the trunk, routes it to AssemblyAI, attaches your number to it, and binds the agent. Then call the number. Details in [deployment/telephony](deployment/telephony/).
 
 ---
 
@@ -81,7 +83,7 @@ Nine agent files. Four demonstrate a parameter, five demonstrate an integration.
 | [`exa-search`](agents/exa-search.jsonc) | web search during a call | `EXA_API_KEY` |
 | [`airtable-crm`](agents/airtable-crm.jsonc) | reading a caller record and writing one back | `AIRTABLE_*` |
 | [`cal-booking`](agents/cal-booking.jsonc) | checking availability, then booking a slot | `CAL_*` |
-| [`dtmf`](agents/dtmf.jsonc) | keypad entry that stays out of the transcript and the model | `DTMF_WEBHOOK_URL` |
+| [`dtmf`](agents/dtmf.jsonc) | PCI compliance: card entry on the keypad, never in the transcript, the logs or the model | `DTMF_WEBHOOK_URL` |
 
 ```sh
 AGENT=exa-search npm run publish
@@ -97,9 +99,23 @@ To write your own, copy the closest file: `cp agents/http-tools.jsonc agents/my-
 | [Browser](deployment/browser/) | `npm start` | Serves a page with a call button and mints session tokens. The API key stays on the server. |
 | [Phone](deployment/telephony/) | `npm run phone` | Configures a Twilio SIP trunk and attaches the agent to your number. |
 
-Twilio passes the call to AssemblyAI over SIP, so nothing in this repo sits in the audio path. To host the browser app, Render prompts for your key during setup:
+Twilio passes the call to AssemblyAI over SIP, so nothing in this repo sits in the audio path.
+
+## Hosting the browser app
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/dan-ince-aai/voice-agent-starter)
+
+Render reads [render.yaml](render.yaml) and prompts for exactly one value, `ASSEMBLYAI_API_KEY`, because that is the only variable marked `sync: false`. It sets `PORT` itself. The other two arrive with defaults you can change under Environment on the service:
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `ASSEMBLYAI_API_KEY` | prompted | Stays on the server. Never sent to the page. |
+| `AGENT` | `minimal` | Which `agents/<name>.jsonc` the service publishes when it boots. |
+| `AGENT_ID` | empty | Paste the id from your `.env` to connect to an agent you already published. |
+
+Leaving `AGENT_ID` empty is fine. The service publishes `AGENT` on boot, and on later restarts it updates the agent of that name rather than creating another one. Setting it is still better, since the deployment then uses the same agent you tested locally and your phone number answers with.
+
+Anyone with the URL can start sessions billed to that key.
 
 ## How it works
 

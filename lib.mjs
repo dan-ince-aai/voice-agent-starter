@@ -225,7 +225,7 @@ export async function aai(path, { method = 'GET', body, headers = {} } = {}) {
 // new agent and remember the id it comes back with, set means PUT the config
 // over that agent. So the first publish creates one agent and every publish
 // after it edits the same one.
-export async function publishAgent(agent) {
+export async function publishAgent(agent, { reuseByName = false } = {}) {
   const id = process.env.AGENT_ID
   if (id) {
     try {
@@ -242,6 +242,18 @@ export async function publishAgent(agent) {
       // make a new one rather than dead-ending.
       if (!(error instanceof ApiError) || error.status !== 404) throw error
       console.warn(`AGENT_ID ${id} no longer exists, creating a new agent`)
+    }
+  }
+  // A hosted server has no AGENT_ID and no writable .env, so without this it
+  // would POST another agent on every restart. Matching the name reuses the
+  // one it made last time. The CLI does not do this: there, creating a second
+  // agent is a deliberate act.
+  if (reuseByName) {
+    const list = await aai('/agents')
+    const existing = (list.agents ?? []).find((a) => a.name === agent.name)
+    if (existing) {
+      await aai(`/agents/${existing.id}`, { method: 'PUT', body: agent })
+      return { id: existing.id, created: false, saved: saveEnv('AGENT_ID', existing.id) }
     }
   }
   const created = await aai('/agents', { method: 'POST', body: agent })
