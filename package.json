@@ -3,11 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "One-click deployable voice agent built on the AssemblyAI Voice Agent API",
+  "description": "Voice agents on the AssemblyAI Voice Agent API: one JSON file, a browser tab or a phone number",
   "engines": {
     "node": ">=18"
   },
   "scripts": {
-    "start": "node server.mjs"
+    "start": "node deployment/browser/server.mjs",
+    "publish": "node publish.mjs",
+    "phone": "node deployment/telephony/connect.mjs"
   }
 }

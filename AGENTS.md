@@ -1,30 +1,51 @@
 # Working on this repo
 
-This is a dependency-free Node starter for the AssemblyAI Voice Agent API. `server.mjs` validates the environment and runs `app.mjs`, the single runtime; the `USE_CASE` env var picks which `config/<use-case>.json` defines the agent. The app serves a small browser app, mints short-lived session tokens server-side, and streams microphone audio to a real-time agent with tool calling.
+A dependency-free Node starter for the AssemblyAI Voice Agent API. An agent is one file in `agents/`; `publish.mjs` pushes it to the account; the two front doors in `deployment/` decide where it answers.
+
+```
+agents/<name>.jsonc        the agent — literally the body of POST /v1/agents
+lib.mjs                    env loading, JSONC parsing, AssemblyAI + Twilio calls
+publish.mjs                npm run publish
+deployment/browser/        npm start — serves a page, mints session tokens
+deployment/telephony/      npm run phone — Twilio SIP trunk, number, attach
+```
 
 ## Run
 
 ```sh
-ASSEMBLYAI_API_KEY=<key> USE_CASE=receptionist node server.mjs
+cp .env.example .env    # ASSEMBLYAI_API_KEY
+npm run publish         # AGENT=<name> to pick one
+npm start
 ```
 
-Node 18+, no installs. `PORT` is respected (defaults to 3000 and hops if busy). Use cases: `web-research`, `receptionist`, `interview-screener`, `appointment-booking`, `pharmacist`.
+Node 18+, no installs. Agents: `minimal`, `keyterms`, `turn-taking`, `byo-llm`, `http-tools`, `exa-search`, `airtable-crm`, `cal-booking`, `dtmf`.
 
-## Architecture
+## How it fits together
 
-- `config/<use-case>.json` is the whole agent definition: `title`, optional `business` identity, `try_hint`, `session` (`system_prompt`, `greeting`, `input` with `keyterms`, `output` with voice), `tools`, and `tool_results` stubs. The server injects it into the page as `window.AGENT_CONFIG`.
-- `/token` proxies `GET https://agents.assemblyai.com/v1/token?product=voice_agent&expires_in_seconds=60` with the server-side API key. The browser only ever sees these short-lived tokens.
-- The client connects to `wss://agents.assemblyai.com/v1/ws?token=...`, sends `session.update` first, then streams base64 PCM16 at 24 kHz as `input.audio` and plays `reply.audio` frames back.
-- `tool_results` holds stubbed tool answers with simulated latency. A real integration replaces the stub lookup inside the `tool.call` handler with a backend call, then sends `tool.result` with `call_id` and a JSON-string `result`.
+- **Agent files are API request bodies.** No wrapper fields, no starter-only keys. If a field isn't in the [create-agent reference](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/create-agent), it doesn't belong in the file. They're `.jsonc` so each field can carry a comment and a doc link; `parseJsonc` in `lib.mjs` strips comments and trailing commas before the file is sent.
+- **`${VAR}` in an agent file** is filled from the environment, the root `.env`, or `agents/<name>.env`, in that order of precedence. Secrets never live in the JSON. Unresolved variables are a hard error naming the variable.
+- **`AGENT_ID` decides create vs update.** Unset: POST a new agent and write the id to `.env`. Set: PUT the config over that agent. A 404 on the PUT falls back to creating one.
+- **Both deployments read the same `AGENT_ID`.** The browser session sends nothing but `{ agent_id }`; the phone number is bound to the same id. That's what keeps the two paths identical, and it's why behaviour changes belong in the agent file, never in a deployment.
 
 ## Rules
 
-- Voices: only use IDs from the documented catalog at https://www.assemblyai.com/docs/voice-agents/voice-agent-api/voices. Never invent or suggest undocumented voice IDs.
-- Never move the API key into client code, commit it, or log it. It belongs in the `ASSEMBLYAI_API_KEY` env var.
-- Only use documented endpoints. Session configuration reference: https://www.assemblyai.com/docs/voice-agents/voice-agent-api/create-agent. Tools: https://www.assemblyai.com/docs/voice-agents/voice-agent-api/tools/overview. Turn detection: https://www.assemblyai.com/docs/voice-agents/voice-agent-api/turn-detection-and-interruptions.
-- Behavior changes belong in the config JSON; runtime changes in `app.mjs`. Keep the runtime a single self-contained file.
-- Voice-first prompt style: short spoken sentences, no visual formatting references, no exclamation marks.
+- Behaviour goes in `agents/*.jsonc`. Runtime changes go in the deployment that owns them. Anything shared goes in `lib.mjs` — it's the only thing both deployments import.
+- Keep each deployment a single self-contained file plus its README.
+- Prefer `http` tools. Client-executed tools can't be answered on a phone call, and `publish.mjs` warns about them.
+- Voices: only IDs from the documented catalog at https://www.assemblyai.com/docs/voice-agents/voice-agent-api/voices. Never invent one.
+- Never move the API key into client code, commit it, or log it. `.env` and `agents/*.env` are gitignored; keep them that way.
+- Only use documented endpoints, and keep the doc links in the agent files accurate — they are the discovery path for anyone reading the repo.
+- Voice-first prompt style: short spoken sentences, no visual formatting, no exclamation marks.
+- New agent file: name it after the parameter or integration it demonstrates, not the persona. Comment every non-obvious field with a link to the page that defines it, and add a row to `README.md` and `agents/README.md`.
+
+## Reference
+
+- [Create an agent](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/create-agent) · [Manage agents](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/manage-agents)
+- [Tools overview](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/tools/overview) · [HTTP tools](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/tools/http-tools)
+- [Turn detection and interruptions](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/turn-detection-and-interruptions)
+- [Connect your own LLM](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/connect-your-own-llm)
+- [Connect to Twilio](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/connect-to-twilio) · [Use your own number](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/twilio-own-number)
 
 ## Deploying
 
-`render.yaml` and `railway.json` are wired for one-click deploys; both platforms set `PORT` and prompt for `ASSEMBLYAI_API_KEY`. Anyone with the deployed URL runs sessions billed to that key.
+`render.yaml` and `railway.json` run the browser deployment; both platforms set `PORT` and prompt for `ASSEMBLYAI_API_KEY`. Set `AGENT_ID` there so the deploy connects to a published agent instead of creating its own. Anyone with the deployed URL, or the phone number, runs sessions billed to that key.

@@ -4,9 +4,9 @@ services:
     runtime: node
     plan: free
     buildCommand: 'true'
-    startCommand: node server.mjs
+    startCommand: node deployment/browser/server.mjs
     envVars:
       - key: ASSEMBLYAI_API_KEY
         sync: false
-      - key: USE_CASE
-        value: receptionist
+      - key: AGENT
+        value: minimal

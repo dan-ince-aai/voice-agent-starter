@@ -4,7 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "node server.mjs",
+    "startCommand": "node deployment/browser/server.mjs",
     "restartPolicyType": "ON_FAILURE"
   }
 }

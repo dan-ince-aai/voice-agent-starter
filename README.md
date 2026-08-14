@@ -1,39 +1,90 @@
 # Voice Agent Starter
 
-A deployable voice agent built on the [AssemblyAI Voice Agent API](https://www.assemblyai.com/docs/voice-agents/voice-agent-api). One Node process, no dependencies: it serves a small web app, mints short-lived session tokens server-side, and streams your microphone to a real-time agent with tool calling.
+An agent is one JSON file. Test it in a browser tab, then put it on a real phone number.
 
-Pick a use case with the `USE_CASE` env var:
+Node 18+, no dependencies. Built on the [AssemblyAI Voice Agent API](https://www.assemblyai.com/docs/voice-agents/voice-agent-api).
 
-| USE_CASE | Agent |
-| --- | --- |
-| `receptionist` (default) | Inbound receptionist for a dental practice |
-| `appointment-booking` | Salon booking with availability checks |
-| `pharmacist` | Pharmacy refills and pickups, hears drug names right |
-| `interview-screener` | Structured phone screen |
-| `web-research` | Looks things up on the live web while you talk |
+## 1. Clone
 
-## Deploy
+```sh
+git clone https://github.com/dan-ince-aai/voice-agent-starter
+cd voice-agent-starter
+```
 
-You need an [AssemblyAI API key](https://www.assemblyai.com/dashboard). Render prompts for it during setup; it stays server-side.
+## 2. Add your key
+
+```sh
+cp .env.example .env
+```
+
+Put your key from [assemblyai.com/dashboard](https://www.assemblyai.com/dashboard) in `ASSEMBLYAI_API_KEY`.
+
+## 3. Pick an agent
+
+Set `AGENT=` in `.env` to any file in [agents/](agents/) — [the lineup](#the-lineup) is below — then:
+
+```sh
+npm run publish
+```
+
+Creates the agent and writes `AGENT_ID` back to `.env`. That pair, the file plus the id, is your agent.
+
+## 4. Test it in the browser
+
+```sh
+npm start
+```
+
+Open localhost:3000 and hit the call button. Edit the agent file, `npm run publish` again, call again — that's the loop.
+
+## 5. Put it on a phone number
+
+```sh
+npm run phone
+```
+
+Add your Twilio credentials to `.env` first — [deployment/telephony](deployment/telephony/) walks through it. Twilio hands the call straight to AssemblyAI over SIP, so there's no media server, no bridge and no webhook to host.
+
+---
+
+## The lineup
+
+One file per idea, in [agents/](agents/).
+
+| `AGENT=` | Shows | Needs |
+| --- | --- | --- |
+| `minimal` | the three required fields | — |
+| `keyterms` | hard words transcribed right | — |
+| `turn-taking` | when your turn ends, interruptions | — |
+| `byo-llm` | Claude via the AssemblyAI gateway, or your own endpoint | — |
+| `http-tools` | tools AssemblyAI calls for you | — |
+| `exa-search` | live web search | `EXA_API_KEY` |
+| `airtable-crm` | look the caller up, log the call | `AIRTABLE_*` |
+| `cal-booking` | check availability, book the slot | `CAL_*` |
+| `dtmf` | keypad input, hidden from the transcript and the model | `DTMF_WEBHOOK_URL` |
+
+## How it fits together
+
+```
+agents/exa-search.jsonc     body of POST /v1/agents
+        + .env              the ${VARS} it names
+           │
+           ▼  npm run publish
+        AGENT_ID
+           ├──  npm start        browser tab
+           └──  npm run phone    real phone number
+```
+
+The first publish creates the agent; every one after updates it in place. Both front doors read the same `AGENT_ID`, so what you heard in the browser is what callers get.
+
+Secrets go in `.env` (or `agents/my-agent.env`) and get referenced as `${VAR}` — both gitignored, so the JSON stays committable. Every field is commented in the file with a link to the docs page that defines it.
+
+## Deploy the browser app
+
+Render prompts for your key during setup:
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/dan-ince-aai/voice-agent-starter)
 
-Railway deploys published templates rather than repo links; publish this repo as a template from your Railway workspace to get a button for it.
+## Cost
 
-Once it's live, open the URL and start the call. Share the link with anyone; they talk to your agent from the browser, and your API key never reaches the page.
-
-## Run locally
-
-```sh
-ASSEMBLYAI_API_KEY=your-key USE_CASE=receptionist node server.mjs
-```
-
-Then open http://localhost:3000.
-
-## Make it yours
-
-Each use case is a JSON file in `config/`: prompt, greeting, voice, keyterms, business identity, and tools with their stubbed results. Edit the JSON and restart; `app.mjs` is the single runtime that serves whatever the config says. The full session reference lives in the [API docs](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/create-agent).
-
-## A note on cost
-
-Anyone with your deployed URL can start sessions billed to your API key. Share it with friends and colleagues, not the whole internet; rotate the key from the dashboard if a link gets away from you.
+Sessions bill to the key that published the agent. A live URL or phone number is an open line to your account — share it with colleagues, not the internet.
