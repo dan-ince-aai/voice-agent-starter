@@ -451,10 +451,15 @@ function setStatus(state, detail) {
   $('status-text').textContent = detail || state
 }
 
+// $4.50 an hour, the list price at assemblyai.com/pricing. Billing is per
+// session minute, so the running figure is an estimate, not an invoice.
+const COST_PER_SECOND = 4.5 / 3600
+
 function tick() {
   const seconds = Math.floor((Date.now() - callStart) / 1000)
   $('elapsed').textContent =
     Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0')
+  $('cost').textContent = '$' + (seconds * COST_PER_SECOND).toFixed(3)
 }
 
 // --- transcript ---
@@ -659,8 +664,10 @@ const HTML = `<!DOCTYPE html>
   .status.listening::before, .status.speaking::before {
     animation: pulse 1.6s ease-in-out infinite; }
   @keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: .25 } }
-  #elapsed { font-family: var(--font-mono); font-size: 12px; color: var(--text-faint);
-             min-width: 40px; text-align: right; }
+  .meter { display: flex; gap: 10px; font-family: var(--font-mono); font-size: 12px;
+           color: var(--text-faint); }
+  #elapsed { min-width: 34px; text-align: right; }
+  #cost { min-width: 48px; text-align: right; }
 
   .panes { flex: 1; min-height: 0; display: grid; gap: 16px;
            grid-template-columns: 1fr 360px; }
@@ -702,10 +709,11 @@ const HTML = `<!DOCTYPE html>
   .event .detail { color: var(--text-faint); overflow: hidden; white-space: nowrap;
                    text-overflow: ellipsis; }
 
-  .controls { display: flex; gap: 8px; align-items: center; }
+  .pane-foot { display: flex; gap: 8px; align-items: center; padding: 12px 16px;
+               background: var(--surface-alt); border-top: 1px solid var(--border); }
   /* .cta-primary on the site: cobolt fill, mono uppercase 14px, 1.4px
      tracking, 40px tall, 4px radius, lightening on hover. */
-  button { height: 40px; padding: 0 24px; border: none;
+  button { height: 40px; padding: 0 24px; margin-left: auto; border: none;
            border-radius: var(--radius-sm); background: var(--cobolt-500);
            color: #fff; font-family: var(--font-mono); font-size: 14px;
            letter-spacing: 1.4px; text-transform: uppercase; white-space: nowrap;
@@ -714,13 +722,13 @@ const HTML = `<!DOCTYPE html>
   button:disabled { opacity: .55; cursor: default; }
   button.live { background: var(--error); }
   button.live:hover { background: #f4695f; }
-  select { flex: 1; max-width: 360px; height: 40px; padding: 0 10px;
-           font-family: var(--font-body); font-size: 14px; color: var(--text);
-           background: var(--surface); border: 1px solid var(--border-strong);
+  select { flex: 0 1 220px; min-width: 0; height: 40px; padding: 0 8px;
+           font-family: var(--font-body); font-size: 13px; color: var(--text-muted);
+           background: var(--surface); border: 1px solid var(--border);
            border-radius: var(--radius-sm); }
   select:disabled { color: var(--text-faint); }
   /* Text button, sized to sit inside the pane header. */
-  .ghost { height: auto; padding: 0; background: transparent;
+  .ghost { height: auto; margin-left: 0; padding: 0; background: transparent;
            color: var(--text-faint); font-size: 12px; letter-spacing: 1.2px; }
   .ghost:hover:not(:disabled) { background: transparent; color: var(--cobolt-500); }
   .tabs { display: flex; gap: 16px; }
@@ -737,7 +745,7 @@ const HTML = `<!DOCTYPE html>
   <header>
     <h1>${AGENT.name}</h1>
     <span class="status idle" id="status"><span id="status-text">idle</span></span>
-    <span id="elapsed">0:00</span>
+    <span class="meter"><span id="elapsed">0:00</span><span id="cost">$0.000</span></span>
   </header>
 
   <div class="panes">
@@ -745,6 +753,10 @@ const HTML = `<!DOCTYPE html>
       <div class="pane-head"><span>Transcript</span></div>
       <div class="pane-body" id="transcript">
         <div class="empty">Start the call and talk. Partial transcripts appear as they stream, and tool calls show up inline.</div>
+      </div>
+      <div class="pane-foot">
+        <select id="mic" aria-label="Microphone"><option value="">Default microphone</option></select>
+        <button id="btn">Start call</button>
       </div>
     </section>
     <section class="pane" id="side">
@@ -762,11 +774,6 @@ const HTML = `<!DOCTYPE html>
         <div class="empty">Loading the published agent.</div>
       </div>
     </section>
-  </div>
-
-  <div class="controls">
-    <select id="mic" aria-label="Microphone"><option value="">Default microphone</option></select>
-    <button id="btn">Start call</button>
   </div>
 </main>
 <script>window.AGENT = ${JSON.stringify(AGENT).replace(/</g, '\\u003c')}</script>
