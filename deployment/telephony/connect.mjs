@@ -20,7 +20,7 @@ import {
 
 reportErrors()
 loadEnv()
-required('ASSEMBLYAI_API_KEY', 'get one at https://www.assemblyai.com/dashboard')
+required('ASSEMBLYAI_API_KEY', 'get one at https://www.assemblyai.com/dashboard/api-keys')
 required('TWILIO_ACCOUNT_SID', 'find it on your Twilio console dashboard')
 required('TWILIO_AUTH_TOKEN', 'find it on your Twilio console dashboard')
 const number = required('TWILIO_PHONE_NUMBER', 'E.164 format, like +15551234567')

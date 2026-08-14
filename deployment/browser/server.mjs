@@ -13,7 +13,7 @@ import http from 'node:http'
 import { aai, loadEnv, publishAgent, readAgent, required } from '../../lib.mjs'
 
 loadEnv()
-required('ASSEMBLYAI_API_KEY', 'get one at https://www.assemblyai.com/dashboard')
+required('ASSEMBLYAI_API_KEY', 'get one at https://www.assemblyai.com/dashboard/api-keys')
 
 // AGENT_ID set means the agent is managed elsewhere, by `npm run publish` or
 // the AssemblyAI dashboard, so connect to it as it is. Unset means publish

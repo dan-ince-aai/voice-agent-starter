@@ -26,6 +26,8 @@ cp .env.example .env
 
 ### 2. Add your key
 
+From [assemblyai.com/dashboard/api-keys](https://www.assemblyai.com/dashboard/api-keys):
+
 ```sh
 # .env
 ASSEMBLYAI_API_KEY=your_key_here

@@ -13,7 +13,7 @@ import { loadEnv, publishAgent, readAgent, reportErrors, required } from './lib.
 
 reportErrors()
 loadEnv()
-required('ASSEMBLYAI_API_KEY', 'get one at https://www.assemblyai.com/dashboard')
+required('ASSEMBLYAI_API_KEY', 'get one at https://www.assemblyai.com/dashboard/api-keys')
 
 const name = process.env.AGENT || 'minimal'
 const agent = readAgent(name)

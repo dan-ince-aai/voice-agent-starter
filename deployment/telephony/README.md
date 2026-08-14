@@ -16,7 +16,7 @@ cp .env.example .env
 ```
 
 ```sh
-ASSEMBLYAI_API_KEY=…                              # assemblyai.com/dashboard
+ASSEMBLYAI_API_KEY=…                              # assemblyai.com/dashboard/api-keys
 TWILIO_ACCOUNT_SID=AC…                            # twilio console
 TWILIO_AUTH_TOKEN=…                               # twilio console
 TWILIO_PHONE_NUMBER=+15551234567                  # a number you already own, E.164
