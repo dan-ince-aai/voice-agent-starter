@@ -230,9 +230,37 @@ navigator.mediaDevices?.addEventListener?.('devicechange', listMics)
 
 $('btn').onclick = () => (ws?.readyState <= 1 ? stop() : start())
 $('log-toggle').onclick = () => {
-  const hidden = document.body.classList.toggle('no-log')
+  const hidden = document.body.classList.toggle('no-side')
   $('log-toggle').textContent = hidden ? 'Show' : 'Hide'
 }
+
+// --- side pane tabs ---
+// The agent config is fetched once, the first time the tab is opened.
+let agentLoaded = false
+
+function showTab(name) {
+  for (const tab of ['events', 'agent']) {
+    $('tab-' + tab).classList.toggle('on', tab === name)
+    $(tab + '-body').hidden = tab !== name
+  }
+  if (name === 'agent' && !agentLoaded) {
+    agentLoaded = true
+    fetch('/agent')
+      .then((res) => res.json())
+      .then((agent) => {
+        $('agent-body').replaceChildren()
+        const pre = document.createElement('pre')
+        pre.textContent = JSON.stringify(agent, null, 2)
+        $('agent-body').append(pre)
+      })
+      .catch(() => {
+        agentLoaded = false
+        $('agent-body').textContent = 'Could not load the agent.'
+      })
+  }
+}
+$('tab-events').onclick = () => showTab('events')
+$('tab-agent').onclick = () => showTab('agent')
 
 async function addWorklet(ctx, code, name) {
   const url = blobUrl(code)
@@ -588,90 +616,130 @@ const HTML = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${AGENT.name}</title>
 <style>
+  /* Tokens taken from assemblyai.com. The three typefaces are licensed and
+     not bundled here, so each falls back the same way the site's own stack
+     does: Georgia for display, system-ui for body, JetBrains Mono for mono. */
   :root {
-    --paper: #F6F4EE; --panel: #FBFAF6; --ink: #17171B; --muted: #6F6B60;
-    --faint: #98948A; --line: #E2DFD4; --brand: #364DEA; --green: #2F7D52;
-    --red: #C6403E; --mono: ui-monospace, "SF Mono", Menlo, monospace;
+    --page-bg: #fdfcf8;
+    --surface: #fff;
+    --surface-alt: #f5f3eb;
+    --border: #dad7cb;
+    --border-strong: #c7c3b2;
+    --text: #4a4945;
+    --text-dark: #1d1b16;
+    --text-muted: #777673;
+    --text-faint: #a5a4a2;
+    --cobolt-500: #3923c7;
+    --cobolt-300: #887bdd;
+    --cobolt-100: #d7d3f4;
+    --green-500: #01762f;
+    --error: #f04438;
+    --radius-sm: 4px;
+    --radius-lg: 12px;
+    --font-display: "Oceanic Text", Georgia, serif;
+    --font-body: "UN 11ST", system-ui, -apple-system, sans-serif;
+    --font-mono: "Modern Gothic Mono", "JetBrains Mono", ui-monospace, monospace;
   }
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
   body {
-    font-family: system-ui, -apple-system, sans-serif; color: var(--ink);
-    background: var(--paper); display: flex; flex-direction: column;
-    align-items: center; padding: 1.5rem 1.25rem 1.25rem;
+    font-family: var(--font-body); font-size: 16px; line-height: 1.3;
+    color: var(--text); background: var(--page-bg); display: flex;
+    flex-direction: column; align-items: center; padding: 24px 20px 20px;
   }
-  main { width: 100%; max-width: 68rem; flex: 1; display: flex;
-         flex-direction: column; min-height: 0; gap: .875rem; }
+  main { width: 100%; max-width: 1088px; flex: 1; display: flex;
+         flex-direction: column; min-height: 0; gap: 16px; }
 
-  header { display: flex; align-items: center; gap: 1rem;
-           padding-bottom: .75rem; border-bottom: 1px solid var(--line); }
-  h1 { font-size: 1rem; font-weight: 600; margin-right: auto; }
-  .status { display: flex; align-items: center; gap: .5rem; color: var(--muted);
-            font-family: var(--mono); font-size: .6875rem; letter-spacing: .12em;
-            text-transform: uppercase; }
+  /* .eyebrow on the site: mono, 12px, uppercase, 1.2px tracking. */
+  .eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 1.2px;
+             text-transform: uppercase; font-feature-settings: "ss09" 1; }
+
+  header { display: flex; align-items: center; gap: 16px;
+           padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+  h1 { font-family: var(--font-display); font-size: 24px; font-weight: 400;
+       letter-spacing: -1.2px; line-height: 1; color: var(--text-dark);
+       margin-right: auto; }
+  .status { display: flex; align-items: center; gap: 8px; color: var(--text-muted); }
   .status::before { content: ""; width: 7px; height: 7px; border-radius: 50%;
                     background: currentColor; flex-shrink: 0; }
-  .status.listening { color: var(--green); }
-  .status.speaking { color: var(--brand); }
-  .status.error { color: var(--red); text-transform: none; letter-spacing: .04em; }
+  .status.listening { color: var(--green-500); }
+  .status.speaking { color: var(--cobolt-500); }
+  .status.error { color: var(--error); text-transform: none; letter-spacing: 0;
+                  font-family: var(--font-body); font-size: 14px; }
   .status.listening::before, .status.speaking::before {
     animation: pulse 1.6s ease-in-out infinite; }
   @keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: .25 } }
-  #elapsed { font-family: var(--mono); font-size: .75rem; color: var(--faint);
-             min-width: 2.5rem; text-align: right; }
+  #elapsed { font-family: var(--font-mono); font-size: 12px; color: var(--text-faint);
+             min-width: 40px; text-align: right; }
 
-  .panes { flex: 1; min-height: 0; display: grid; gap: .875rem;
-           grid-template-columns: 1fr 23rem; }
-  body.no-log .panes { grid-template-columns: 1fr; }
-  body.no-log #events { display: none; }
+  .panes { flex: 1; min-height: 0; display: grid; gap: 16px;
+           grid-template-columns: 1fr 360px; }
+  body.no-side .panes { grid-template-columns: 1fr; }
+  body.no-side #side { display: none; }
+  [hidden] { display: none !important; }
   @media (max-width: 880px) {
-    .panes { grid-template-columns: 1fr; grid-template-rows: 1fr 11rem; }
-    body.no-log .panes { grid-template-rows: 1fr; }
+    .panes { grid-template-columns: 1fr; grid-template-rows: 1fr 176px; }
+    body.no-side .panes { grid-template-rows: 1fr; }
   }
 
   .pane { display: flex; flex-direction: column; min-height: 0;
-          background: var(--panel); border: 1px solid var(--line);
-          border-radius: .625rem; overflow: hidden; }
+          background: var(--surface); border: 1px solid var(--border);
+          border-radius: var(--radius-lg); overflow: hidden; }
   .pane-head { display: flex; align-items: center; justify-content: space-between;
-               gap: 1rem; padding: .5rem .875rem; border-bottom: 1px solid var(--line);
-               font-family: var(--mono); font-size: .625rem; letter-spacing: .1em;
-               text-transform: uppercase; color: var(--faint); }
-  .pane-body { flex: 1; overflow-y: auto; padding: .875rem; }
-  .empty { color: var(--faint); font-size: .8125rem; line-height: 1.5; }
+               gap: 16px; padding: 10px 16px; background: var(--surface-alt);
+               border-bottom: 1px solid var(--border); color: var(--text-muted); }
+  .pane-body { flex: 1; overflow-y: auto; padding: 16px; }
+  .empty { color: var(--text-faint); font-size: 14px; line-height: 1.4; }
 
-  #transcript { display: flex; flex-direction: column; gap: .625rem; }
-  .line { display: flex; gap: .75rem; font-size: .9375rem; line-height: 1.5; }
-  .who { font-family: var(--mono); font-size: .625rem; letter-spacing: .1em;
-         text-transform: uppercase; color: var(--faint); padding-top: .3rem;
-         flex-shrink: 0; width: 5.5rem; overflow: hidden; white-space: nowrap;
-         text-overflow: ellipsis; }
-  .line.partial .said { color: var(--muted); }
-  .line.tool { font-family: var(--mono); font-size: .75rem; color: var(--brand); }
+  #transcript { display: flex; flex-direction: column; gap: 12px; }
+  .line { display: flex; gap: 12px; font-size: 16px; line-height: 1.4; }
+  .who { color: var(--text-faint); padding-top: 3px; flex-shrink: 0; width: 88px;
+         overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .line.agent .said { color: var(--text-dark); }
+  .line.partial .said { color: var(--text-muted); }
+  .line.tool { font-family: var(--font-mono); font-size: 13px;
+               color: var(--cobolt-500); }
   .line.tool .said { word-break: break-all; }
 
-  #events-body { font-family: var(--mono); font-size: .6875rem; line-height: 1.7; }
-  .event { display: flex; gap: .5rem; align-items: baseline; white-space: nowrap; }
-  .event .at { color: var(--faint); min-width: 2.75rem; text-align: right;
+  #events-body { font-family: var(--font-mono); font-size: 12px; line-height: 1.8; }
+  .event { display: flex; gap: 8px; align-items: baseline; white-space: nowrap; }
+  .event .at { color: var(--text-faint); min-width: 44px; text-align: right;
                flex-shrink: 0; }
-  .event .dir, .event .count { color: var(--faint); flex-shrink: 0; }
+  .event .dir, .event .count { color: var(--text-faint); flex-shrink: 0; }
   .event .count:empty, .event .detail:empty { display: none; }
-  .event .type { flex-shrink: 0; }
-  .event.up .type { color: var(--muted); }
-  .event .detail { color: var(--faint); overflow: hidden; white-space: nowrap;
+  .event .type { flex-shrink: 0; color: var(--text-dark); }
+  .event.up .type { color: var(--text-muted); }
+  .event .detail { color: var(--text-faint); overflow: hidden; white-space: nowrap;
                    text-overflow: ellipsis; }
 
-  .controls { display: flex; gap: .625rem; align-items: center; }
-  select, button { font: inherit; border-radius: .5rem; border: 1px solid var(--line); }
-  select { flex: 1; max-width: 22rem; padding: .6rem .7rem; font-size: .875rem;
-           background: var(--panel); color: var(--ink); }
-  select:disabled { color: var(--faint); }
-  button { font-weight: 600; color: #fff; background: var(--brand);
-           border-color: transparent; padding: .7rem 1.75rem; cursor: pointer; }
+  .controls { display: flex; gap: 8px; align-items: center; }
+  /* .cta-primary on the site: cobolt fill, mono uppercase 14px, 1.4px
+     tracking, 40px tall, 4px radius, lightening on hover. */
+  button { height: 40px; padding: 0 24px; border: none;
+           border-radius: var(--radius-sm); background: var(--cobolt-500);
+           color: #fff; font-family: var(--font-mono); font-size: 14px;
+           letter-spacing: 1.4px; text-transform: uppercase; white-space: nowrap;
+           cursor: pointer; transition: background-color .2s; }
+  button:hover:not(:disabled) { background: var(--cobolt-300); }
   button:disabled { opacity: .55; cursor: default; }
-  button.live { background: var(--red); }
-  .ghost { background: transparent; color: var(--faint); border: none; padding: 0;
-           font-family: var(--mono); font-size: .625rem; letter-spacing: .1em;
-           text-transform: uppercase; cursor: pointer; }
+  button.live { background: var(--error); }
+  button.live:hover { background: #f4695f; }
+  select { flex: 1; max-width: 360px; height: 40px; padding: 0 10px;
+           font-family: var(--font-body); font-size: 14px; color: var(--text);
+           background: var(--surface); border: 1px solid var(--border-strong);
+           border-radius: var(--radius-sm); }
+  select:disabled { color: var(--text-faint); }
+  /* Text button, sized to sit inside the pane header. */
+  .ghost { height: auto; padding: 0; background: transparent;
+           color: var(--text-faint); font-size: 12px; letter-spacing: 1.2px; }
+  .ghost:hover:not(:disabled) { background: transparent; color: var(--cobolt-500); }
+  .tabs { display: flex; gap: 16px; }
+  .tab.on { color: var(--text-dark); }
+
+  /* Read-only view of the agent as the API stored it. */
+  #agent-body pre { font-family: var(--font-mono); font-size: 12px;
+                    line-height: 1.6; color: var(--text); white-space: pre-wrap;
+                    word-break: break-word; }
 </style>
 </head>
 <body>
@@ -689,13 +757,19 @@ const HTML = `<!DOCTYPE html>
         <div class="empty">Start the call and talk. Partial transcripts appear as they stream, and tool calls show up inline.</div>
       </div>
     </section>
-    <section class="pane" id="events">
+    <section class="pane" id="side">
       <div class="pane-head">
-        <span>Events</span>
+        <span class="tabs">
+          <button class="ghost tab on" id="tab-events">Events</button>
+          <button class="ghost tab" id="tab-agent">Agent</button>
+        </span>
         <button class="ghost" id="log-toggle">Hide</button>
       </div>
       <div class="pane-body" id="events-body">
         <div class="empty">Every websocket frame, both directions. Repeats collapse into a count.</div>
+      </div>
+      <div class="pane-body" id="agent-body" hidden>
+        <div class="empty">Loading the published agent.</div>
       </div>
     </section>
   </div>
@@ -711,7 +785,33 @@ const HTML = `<!DOCTYPE html>
 </html>`
 
 // --- server ----------------------------------------------------------------
+
+// The stored agent, for the read-only view in the page. The API already keeps
+// tool header values and llm keys write-only, and these deletes make sure the
+// page never sees them even if that changes. The system prompt is visible, so
+// on a public deployment this route shows it to anyone who opens the page.
+function publicAgent(agent) {
+  const copy = structuredClone(agent)
+  for (const tool of copy.tools ?? []) {
+    for (const header of tool.http?.headers ?? []) header.value = '<hidden>'
+  }
+  for (const llm of copy.llm ?? []) delete llm.api_key
+  return copy
+}
+
 const server = http.createServer(async (req, res) => {
+  if (req.url === '/agent') {
+    try {
+      const agent = await aai(`/agents/${AGENT.id}`)
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify(publicAgent(agent)))
+    } catch (error) {
+      console.error(error.message)
+      res.writeHead(502, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ error: 'could not load the agent' }))
+    }
+    return
+  }
   if (req.url === '/token') {
     try {
       const token = await aai('/token?product=voice_agent&expires_in_seconds=60')
