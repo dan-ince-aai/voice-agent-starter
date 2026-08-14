@@ -1,90 +1,147 @@
-# Voice Agent Starter
+<img src="assemblyai.png" width="500"/>
 
-An agent is one JSON file. Test it in a browser tab, then put it on a real phone number.
+---
 
-Node 18+, no dependencies. Built on the [AssemblyAI Voice Agent API](https://www.assemblyai.com/docs/voice-agents/voice-agent-api).
+[![Voice Agent API](https://img.shields.io/badge/docs-Voice%20Agent%20API-2545E6)](https://www.assemblyai.com/docs/voice-agents/voice-agent-api)
+[![Node](https://img.shields.io/badge/node-%E2%89%A518-5FA04E?logo=node.js&logoColor=white)](https://nodejs.org)
+[![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)](package.json)
+[![AssemblyAI Twitter](https://img.shields.io/twitter/follow/AssemblyAI?label=%40AssemblyAI&style=social)](https://twitter.com/AssemblyAI)
+[![AssemblyAI YouTube](https://img.shields.io/youtube/channel/subscribers/UCtatfZMf-8EkIwASXM4ts0A)](https://www.youtube.com/@AssemblyAI)
 
-## 1. Clone
+# AssemblyAI Voice Agent Starter
+
+Voice agents defined as JSON files. Publish one to your AssemblyAI account, then talk to it in a browser tab or by calling a phone number.
+
+Each file in [agents/](agents/) is the request body for `POST /v1/agents`. The starter sends it unchanged, saves the agent ID it gets back to `.env`, and both deployments connect using that ID. Built on the [AssemblyAI Voice Agent API](https://www.assemblyai.com/products/voice-agent-api). Node 18 or later, no dependencies.
+
+## Quickstart
+
+### 1. Clone
 
 ```sh
 git clone https://github.com/dan-ince-aai/voice-agent-starter
 cd voice-agent-starter
-```
-
-## 2. Add your key
-
-```sh
 cp .env.example .env
 ```
 
-Put your key from [assemblyai.com/dashboard](https://www.assemblyai.com/dashboard) in `ASSEMBLYAI_API_KEY`.
+### 2. Add your key
 
-## 3. Pick an agent
+```sh
+# .env
+ASSEMBLYAI_API_KEY=your_key_here
+```
 
-Set `AGENT=` in `.env` to any file in [agents/](agents/) — [the lineup](#the-lineup) is below — then:
+### 3. Publish an agent
 
 ```sh
 npm run publish
 ```
 
-Creates the agent and writes `AGENT_ID` back to `.env`. That pair, the file plus the id, is your agent.
+Publishes `agents/minimal.jsonc` and writes `AGENT_ID` back to `.env`. Later runs update that agent instead of creating another. For any other file: `AGENT=http-tools npm run publish`.
 
-## 4. Test it in the browser
+### 4. Talk to it
 
 ```sh
 npm start
 ```
 
-Open localhost:3000 and hit the call button. Edit the agent file, `npm run publish` again, call again — that's the loop.
+Open http://localhost:3000 and start the call.
 
-## 5. Put it on a phone number
+### 5. Put it on a phone number
+
+```sh
+# .env
+TWILIO_ACCOUNT_SID=AC...
+TWILIO_AUTH_TOKEN=your_token_here
+TWILIO_PHONE_NUMBER=+15551234567
+TWILIO_TRUNK_DOMAIN=acme-agent.pstn.twilio.com
+```
 
 ```sh
 npm run phone
 ```
 
-Add your Twilio credentials to `.env` first — [deployment/telephony](deployment/telephony/) walks through it. Twilio hands the call straight to AssemblyAI over SIP, so there's no media server, no bridge and no webhook to host.
+Then call the number. Details in [deployment/telephony](deployment/telephony/).
 
 ---
 
-## The lineup
+## Core examples
 
-One file per idea, in [agents/](agents/).
+Nine agent files. Four demonstrate a parameter, five demonstrate an integration.
 
-| `AGENT=` | Shows | Needs |
+| `AGENT=` | Demonstrates | Requires |
 | --- | --- | --- |
-| `minimal` | the three required fields | — |
-| `keyterms` | hard words transcribed right | — |
-| `turn-taking` | when your turn ends, interruptions | — |
-| `byo-llm` | Claude via the AssemblyAI gateway, or your own endpoint | — |
-| `http-tools` | tools AssemblyAI calls for you | — |
-| `exa-search` | live web search | `EXA_API_KEY` |
-| `airtable-crm` | look the caller up, log the call | `AIRTABLE_*` |
-| `cal-booking` | check availability, book the slot | `CAL_*` |
-| `dtmf` | keypad input, hidden from the transcript and the model | `DTMF_WEBHOOK_URL` |
+| [`minimal`](agents/minimal.jsonc) | the three required fields, and the defaults applied to the rest | |
+| [`keyterms`](agents/keyterms.jsonc) | biasing transcription toward names and jargon | |
+| [`turn-taking`](agents/turn-taking.jsonc) | silence thresholds and interruption handling | |
+| [`byo-llm`](agents/byo-llm.jsonc) | Claude through the AssemblyAI gateway, or your own endpoint | |
+| [`http-tools`](agents/http-tools.jsonc) | tools that AssemblyAI calls on the agent's behalf | |
+| [`exa-search`](agents/exa-search.jsonc) | web search during a call | `EXA_API_KEY` |
+| [`airtable-crm`](agents/airtable-crm.jsonc) | reading a caller record and writing one back | `AIRTABLE_*` |
+| [`cal-booking`](agents/cal-booking.jsonc) | checking availability, then booking a slot | `CAL_*` |
+| [`dtmf`](agents/dtmf.jsonc) | keypad entry that stays out of the transcript and the model | `DTMF_WEBHOOK_URL` |
 
-## How it fits together
+```sh
+AGENT=exa-search npm run publish
+npm start
+```
+
+To write your own, copy the closest file: `cp agents/http-tools.jsonc agents/my-agent.jsonc`. Every field is commented, with a link to the documentation page that defines it.
+
+## Where it answers
+
+| | | |
+| --- | --- | --- |
+| [Browser](deployment/browser/) | `npm start` | Serves a page with a call button and mints session tokens. The API key stays on the server. |
+| [Phone](deployment/telephony/) | `npm run phone` | Configures a Twilio SIP trunk and attaches the agent to your number. |
+
+Twilio passes the call to AssemblyAI over SIP, so nothing in this repo sits in the audio path. To host the browser app, Render prompts for your key during setup:
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/dan-ince-aai/voice-agent-starter)
+
+## How it works
 
 ```
 agents/exa-search.jsonc     body of POST /v1/agents
-        + .env              the ${VARS} it names
+        + .env              the ${VARS} it references
            │
            ▼  npm run publish
         AGENT_ID
            ├──  npm start        browser tab
-           └──  npm run phone    real phone number
+           └──  npm run phone    phone number
 ```
 
-The first publish creates the agent; every one after updates it in place. Both front doors read the same `AGENT_ID`, so what you heard in the browser is what callers get.
+The first publish sends `POST /v1/agents` and stores the returned ID in `.env`. With `AGENT_ID` set, later publishes send `PUT /v1/agents/{id}`, so the browser tab and the phone number both pick up the change on the next call.
 
-Secrets go in `.env` (or `agents/my-agent.env`) and get referenced as `${VAR}` — both gitignored, so the JSON stays committable. Every field is commented in the file with a link to the docs page that defines it.
+Values written as `${VAR}` anywhere in an agent file are substituted at publish time from `.env`, or from `agents/<name>.env` for credentials only one agent uses. Both files are gitignored, so the JSON can be committed.
 
-## Deploy the browser app
+## Build with AI coding agents
 
-Render prompts for your key during setup:
+This repo includes [AGENTS.md](AGENTS.md), which Claude Code, Cursor and Copilot read for its conventions. The Voice Agent API changes, so point coding tools at the current documentation rather than letting them work from memory:
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/dan-ince-aai/voice-agent-starter)
+> Always fetch https://assemblyai.com/docs/llms.txt before writing AssemblyAI code. The API has changed, do not rely on memorized parameter names.
+
+```sh
+claude mcp add --transport http --scope user assemblyai-docs https://mcp.assemblyai.com/docs
+npx skills add AssemblyAI/assemblyai-skill --global
+```
+
+See [Build with AI tools](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/build-with-ai-tools) and [Coding agent prompts](https://www.assemblyai.com/docs/coding-agent-prompts).
+
+## Voice Agent API
+
+Product: [Voice Agent API](https://www.assemblyai.com/products/voice-agent-api) · [Pricing](https://www.assemblyai.com/pricing) · [Dashboard](https://www.assemblyai.com/dashboard)
+
+Start here: [Documentation](https://www.assemblyai.com/docs/voice-agents/voice-agent-api) · [Create an agent](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/create-agent) · [Manage agents](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/manage-agents) · [Prompting guide](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/prompting-guide) · [Best practices](https://www.assemblyai.com/docs/voice-agents/best-practices)
+
+Configuration: [Voices](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/voices) · [Greeting](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/greeting) · [Turn detection](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/turn-detection-and-interruptions) · [Keyterms](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/transcription-prompt) · [Languages](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/supported-languages) · [Noise suppression](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/noise-suppression) · [Custom LLM](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/connect-your-own-llm)
+
+Tools: [Overview](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/tools/overview) · [HTTP tools](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/tools/http-tools) · [Client-side tools](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/tools/client-side-tools)
+
+Deployment: [Deploy](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/deploy) · [Browser integration](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/browser-integration) · [Connect to Twilio](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/connect-to-twilio) · [Use your own number](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/twilio-own-number) · [Webhooks](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/webhooks)
+
+Reference: [Session configuration](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/session-configuration) · [Events](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/events-reference) · [Message sequence](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/message-sequence) · [Session history](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/session-history) · [Troubleshooting](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/troubleshooting)
 
 ## Cost
 
-Sessions bill to the key that published the agent. A live URL or phone number is an open line to your account — share it with colleagues, not the internet.
+Sessions are billed to the API key that published the agent. Anyone with the deployed URL or the phone number can start a session on that key.

@@ -1,4 +1,4 @@
-// Integration: Airtable — knows who's calling, writes the call back.
+// Integration: Airtable, looking up the caller and logging the call.
 //
 // Needs AIRTABLE_API_KEY (https://airtable.com/create/tokens, scopes
 // data.records:read + data.records:write) and AIRTABLE_BASE_ID, the app…

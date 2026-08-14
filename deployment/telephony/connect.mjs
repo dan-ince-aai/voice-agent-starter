@@ -53,7 +53,7 @@ if (agentId) {
   const name = process.env.AGENT || 'minimal'
   const agent = readAgent(name)
   agentId = (await publishAgent(agent)).id
-  console.log(`Agent: ${agentId} — published "${agent.name}" from agents/${name}.jsonc`)
+  console.log(`Agent: ${agentId}, published "${agent.name}" from agents/${name}.jsonc`)
 }
 
 // 2. The number has to be one you already bought in Twilio.

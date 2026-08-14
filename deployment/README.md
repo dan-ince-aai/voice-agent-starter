@@ -1,10 +1,10 @@
 # deployment/
 
-Where the agent answers. Both read the same `AGENT_ID`, so publishing once serves both.
+Where the agent answers. Both read the same `AGENT_ID`, so one published agent serves both.
 
 | | | |
 | --- | --- | --- |
-| [browser/](browser/) | `npm start` | Page with a call button. Where you shape it. |
-| [telephony/](telephony/) | `npm run phone` | Real phone number over SIP. Where it ships. |
+| [browser/](browser/) | `npm start` | A page with a call button, for iterating on an agent. |
+| [telephony/](telephony/) | `npm run phone` | A phone number, over a Twilio SIP trunk. |
 
-Behaviour lives in [agents/](../agents/) — nothing here defines the agent.
+Neither defines the agent. Behaviour lives in [agents/](../agents/).

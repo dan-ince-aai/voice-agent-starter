@@ -1,6 +1,6 @@
 # Phone
 
-Your agent answers a real phone number. Twilio hands the call to AssemblyAI over SIP — no media server, no bridge, no transcoding, no webhook to host.
+Attaches your agent to a phone number you own in Twilio. Twilio passes inbound calls to AssemblyAI over SIP, so there is no media server, audio bridge or webhook to run.
 
 ## 1. Clone
 
@@ -20,21 +20,17 @@ ASSEMBLYAI_API_KEY=…                              # assemblyai.com/dashboard
 TWILIO_ACCOUNT_SID=AC…                            # twilio console
 TWILIO_AUTH_TOKEN=…                               # twilio console
 TWILIO_PHONE_NUMBER=+15551234567                  # a number you already own, E.164
-TWILIO_TRUNK_DOMAIN=acme-agent.pstn.twilio.com    # you pick it, must end .pstn.twilio.com
+TWILIO_TRUNK_DOMAIN=acme-agent.pstn.twilio.com    # you choose this, must end .pstn.twilio.com
 ```
 
 ## 3. Pick an agent
 
-```sh
-AGENT=cal-booking
-```
-
-Any file in [agents/](../../agents/), or your own: `cp agents/http-tools.jsonc agents/my-agent.jsonc`. On the phone, use `http` tools — a call has no browser to answer anything else.
+Any file in [agents/](../../agents/), or one of your own copied from them. Tools need an `http` block to work on a call, since there is no browser to answer a client-side tool.
 
 ## 4. Deploy
 
 ```sh
-npm run phone
+AGENT=cal-booking npm run phone
 ```
 
 ```
@@ -50,31 +46,33 @@ Call the number.
 
 ---
 
-## What that did
+## What it did
 
-1. Published the agent, or used `AGENT_ID` if you already had one.
+1. Published the agent, or used `AGENT_ID` if one was already set.
 2. Created a SIP trunk on your domain.
-3. Pointed its origination URL at `sip:sip.assemblyai.com`.
+3. Set its origination URL to `sip:sip.assemblyai.com`.
 4. Attached your number to the trunk.
 5. Registered the number with AssemblyAI and bound the agent to it.
 
-Safe to re-run. To change behaviour, edit the agent and `npm run publish` — the number already points at that id, so Twilio doesn't need touching again.
+Each step checks for existing state first, so the script can be re-run safely. To change how the agent behaves, edit its file and run `npm run publish`. The number already points at that agent ID, so Twilio needs no further changes.
 
-## Worth knowing
+## Notes
 
-- **The trunk takes over the number.** Voice webhooks set on the number itself stop applying.
-- **DTMF is phone-only.** [dtmf.jsonc](../../agents/dtmf.jsonc) takes card digits from the keypad, hidden from the transcript, the logs and the model.
-- **Two meters run.** Twilio bills the minutes, AssemblyAI bills the session.
+The trunk takes ownership of the number. Any Voice webhook configured on the number itself no longer applies.
 
-## When it breaks
+DTMF only works on a phone call. [dtmf.jsonc](../../agents/dtmf.jsonc) collects digits from the keypad and keeps them out of the transcript, the logs and the model.
 
-| Message | Fix |
+Twilio bills the inbound minutes and AssemblyAI bills the session, so a live number draws on both accounts.
+
+## When it fails
+
+| Message | Cause |
 | --- | --- |
-| `is not on this Twilio account` | Buy the number in Twilio first; check it's E.164. |
-| `is attached to a different trunk` | Detach it in the Twilio console, re-run. |
-| `Twilio POST /v1/Trunks failed (400)` | Domain taken or malformed. Pick another `*.pstn.twilio.com`. |
-| Connects, then silence | Origination URL must be exactly `sip:sip.assemblyai.com`, enabled. |
+| `is not on this Twilio account` | The number isn't in your account, or isn't in E.164 format. |
+| `is attached to a different trunk` | Detach it in the Twilio console, then re-run. |
+| `Twilio POST /v1/Trunks failed (400)` | The SIP domain is taken or malformed. Choose another `*.pstn.twilio.com`. |
+| Call connects, then silence | The origination URL must be exactly `sip:sip.assemblyai.com` and enabled. |
 
-## Docs
+## Documentation
 
 [Connect to Twilio](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/connect-to-twilio) · [Use your own number](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/twilio-own-number)

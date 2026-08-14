@@ -1,4 +1,4 @@
-// Showcase: keyterms — getting hard words transcribed right.
+// Showcase: keyterms, which bias transcription toward words you expect.
 //
 // Drug names, SKUs and surnames are what a transcriber guesses at, and a
 // wrong guess becomes a wrong answer. keyterms tells it what to expect.

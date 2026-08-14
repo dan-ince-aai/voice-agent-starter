@@ -1,4 +1,4 @@
-// Showcase: turn detection — when the agent decides it's their turn.
+// Showcase: turn detection, which decides when the agent starts talking.
 //
 // This is the difference between an agent that feels alive and one that talks
 // over you. Every number below is a default made explicit, so you can feel

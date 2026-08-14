@@ -15,9 +15,9 @@ import { aai, loadEnv, publishAgent, readAgent, required } from '../../lib.mjs'
 loadEnv()
 required('ASSEMBLYAI_API_KEY', 'get one at https://www.assemblyai.com/dashboard')
 
-// AGENT_ID set means the agent is managed elsewhere — `npm run publish`, or
-// the AssemblyAI dashboard — so connect to it as-is. Unset means publish the
-// config file now and remember the id it gets.
+// AGENT_ID set means the agent is managed elsewhere, by `npm run publish` or
+// the AssemblyAI dashboard, so connect to it as it is. Unset means publish
+// the agent file now and remember the id it gets.
 const AGENT = await (async () => {
   if (process.env.AGENT_ID) {
     try {
@@ -79,7 +79,7 @@ async function start() {
     // The API key never reaches the page; this token expires in 60 seconds.
     const res = await fetch('/token')
     if (!res.ok) {
-      setStatus('error', 'could not mint a token — check the API key')
+      setStatus('error', 'could not mint a token, check the API key')
       reset()
       return
     }

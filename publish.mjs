@@ -6,8 +6,8 @@
 //
 // The first run creates the agent and writes AGENT_ID to .env. Every run
 // after that updates that same agent in place, so the id stays valid and
-// anything already pointed at it — a browser tab, a phone number — picks up
-// the change on the next call.
+// a browser tab or phone number pointed at it picks up the change on the
+// next call.
 
 import { loadEnv, publishAgent, readAgent, reportErrors, required } from './lib.mjs'
 
@@ -22,7 +22,7 @@ const { id, created, saved } = await publishAgent(agent)
 console.log(`${created ? 'Created' : 'Updated'} "${agent.name}" from agents/${name}.jsonc`)
 console.log(`AGENT_ID=${id}`)
 if (created && !saved) {
-  console.log('Could not write .env — set AGENT_ID yourself to keep updating this agent.')
+  console.log('Could not write .env. Set AGENT_ID yourself to keep updating this agent.')
 } else if (created) {
   console.log('Saved to .env.')
 }

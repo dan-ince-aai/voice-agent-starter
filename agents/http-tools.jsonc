@@ -1,4 +1,4 @@
-// Showcase: http tools — the agent calling real APIs mid-sentence.
+// Showcase: http tools, which let the agent call an API mid-conversation.
 //
 // AssemblyAI makes the request, so these work in a browser tab and on a phone
 // call alike. Arguments become the query string on GET, the JSON body on POST.

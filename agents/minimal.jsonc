@@ -6,7 +6,7 @@
 //
 // https://www.assemblyai.com/docs/voice-agents/voice-agent-api/create-agent
 {
-  // Shown in the AssemblyAI dashboard. Rename freely — the agent is tracked
+  // Shown in the AssemblyAI dashboard. Safe to rename: the agent is tracked
   // by the AGENT_ID in your .env, not by this.
   "name": "Minimal agent",
 

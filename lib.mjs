@@ -55,7 +55,7 @@ export function saveEnv(key, value, path = ENV_FILE) {
 export function required(name, hint) {
   const value = process.env[name]
   if (!value) {
-    console.error(`Missing ${name}${hint ? ` — ${hint}` : ''}`)
+    console.error(`Missing ${name}${hint ? `. ${hint}` : ''}`)
     process.exit(1)
   }
   return value
@@ -179,7 +179,7 @@ export function readAgent(name) {
   const agent = interpolate(parseJsonc(text), name, missing)
   if (missing.size) {
     console.error(
-      `agents/${name}.jsonc needs ${[...missing].join(', ')} — add ${
+      `agents/${name}.jsonc needs ${[...missing].join(', ')}. Add ${
         missing.size > 1 ? 'them' : 'it'
       } to .env`
     )
@@ -230,7 +230,7 @@ export async function publishAgent(agent) {
   if (id) {
     try {
       // Publishing a different file over the same id replaces what that agent
-      // is — worth saying out loud rather than silently swapping it.
+      // is, which is worth printing rather than swapping it silently.
       const current = await aai(`/agents/${id}`)
       if (current.name && current.name !== agent.name) {
         console.log(`Note: agent ${id} was "${current.name}"`)
@@ -241,7 +241,7 @@ export async function publishAgent(agent) {
       // The id in .env points at an agent that is gone; fall through and
       // make a new one rather than dead-ending.
       if (!(error instanceof ApiError) || error.status !== 404) throw error
-      console.warn(`AGENT_ID ${id} no longer exists — creating a new agent`)
+      console.warn(`AGENT_ID ${id} no longer exists, creating a new agent`)
     }
   }
   const created = await aai('/agents', { method: 'POST', body: agent })

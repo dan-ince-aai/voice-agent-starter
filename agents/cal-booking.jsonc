@@ -1,4 +1,4 @@
-// Integration: Cal.com — books a real slot in a real calendar, out loud.
+// Integration: Cal.com, booking a real slot in a real calendar.
 //
 // Needs CAL_API_KEY (https://app.cal.com/settings/developer/api-keys) and
 // CAL_EVENT_TYPE_ID, the number in the event type's URL.

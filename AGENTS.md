@@ -3,11 +3,11 @@
 A dependency-free Node starter for the AssemblyAI Voice Agent API. An agent is one file in `agents/`; `publish.mjs` pushes it to the account; the two front doors in `deployment/` decide where it answers.
 
 ```
-agents/<name>.jsonc        the agent — literally the body of POST /v1/agents
+agents/<name>.jsonc        the agent, as the body of POST /v1/agents
 lib.mjs                    env loading, JSONC parsing, AssemblyAI + Twilio calls
 publish.mjs                npm run publish
-deployment/browser/        npm start — serves a page, mints session tokens
-deployment/telephony/      npm run phone — Twilio SIP trunk, number, attach
+deployment/browser/        npm start, serves a page and mints session tokens
+deployment/telephony/      npm run phone, Twilio SIP trunk and number binding
 ```
 
 ## Run
@@ -22,19 +22,22 @@ Node 18+, no installs. Agents: `minimal`, `keyterms`, `turn-taking`, `byo-llm`, 
 
 ## How it fits together
 
-- **Agent files are API request bodies.** No wrapper fields, no starter-only keys. If a field isn't in the [create-agent reference](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/create-agent), it doesn't belong in the file. They're `.jsonc` so each field can carry a comment and a doc link; `parseJsonc` in `lib.mjs` strips comments and trailing commas before the file is sent.
-- **`${VAR}` in an agent file** is filled from the environment, the root `.env`, or `agents/<name>.env`, in that order of precedence. Secrets never live in the JSON. Unresolved variables are a hard error naming the variable.
-- **`AGENT_ID` decides create vs update.** Unset: POST a new agent and write the id to `.env`. Set: PUT the config over that agent. A 404 on the PUT falls back to creating one.
-- **Both deployments read the same `AGENT_ID`.** The browser session sends nothing but `{ agent_id }`; the phone number is bound to the same id. That's what keeps the two paths identical, and it's why behaviour changes belong in the agent file, never in a deployment.
+Agent files are API request bodies. If a field isn't in the [create-agent reference](https://www.assemblyai.com/docs/voice-agents/voice-agent-api/create-agent), it doesn't belong in the file. They use `.jsonc` so each field can carry a comment and a doc link. `parseJsonc` in `lib.mjs` strips comments and trailing commas before the file is sent.
+
+`${VAR}` in an agent file is substituted from the environment, the root `.env`, or `agents/<name>.env`, in that order of precedence. Secrets never live in the JSON, and an unresolved variable stops the publish with a message naming it.
+
+`AGENT_ID` decides create versus update. Unset, `publishAgent` sends `POST /v1/agents` and writes the returned id to `.env`. Set, it sends `PUT /v1/agents/{id}`, falling back to a create if that returns 404.
+
+Both deployments read the same `AGENT_ID`. The browser session sends only `{ agent_id }` and the phone number is bound to the same id, which is why behaviour changes belong in the agent file rather than in a deployment.
 
 ## Rules
 
-- Behaviour goes in `agents/*.jsonc`. Runtime changes go in the deployment that owns them. Anything shared goes in `lib.mjs` — it's the only thing both deployments import.
+- Behaviour goes in `agents/*.jsonc`. Runtime changes go in the deployment that owns them. Anything shared goes in `lib.mjs`, the only file both deployments import.
 - Keep each deployment a single self-contained file plus its README.
 - Prefer `http` tools. Client-executed tools can't be answered on a phone call, and `publish.mjs` warns about them.
 - Voices: only IDs from the documented catalog at https://www.assemblyai.com/docs/voice-agents/voice-agent-api/voices. Never invent one.
 - Never move the API key into client code, commit it, or log it. `.env` and `agents/*.env` are gitignored; keep them that way.
-- Only use documented endpoints, and keep the doc links in the agent files accurate — they are the discovery path for anyone reading the repo.
+- Only use documented endpoints, and keep the doc links in the agent files accurate, since they are how anyone reading the repo finds the reference.
 - Voice-first prompt style: short spoken sentences, no visual formatting, no exclamation marks.
 - New agent file: name it after the parameter or integration it demonstrates, not the persona. Comment every non-obvious field with a link to the page that defines it, and add a row to `README.md` and `agents/README.md`.
 
