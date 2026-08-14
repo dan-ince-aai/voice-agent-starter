@@ -6,26 +6,27 @@
 // The API key stays in this process; the page only gets 60-second tokens.
 
 import http from 'node:http'
-import { aai, loadEnv, publishAgent, readAgent, required } from '../../lib.mjs'
+import { aai, loadEnv, publishAgent, readAgent, required, storedAgentId } from '../../lib.mjs'
 
 loadEnv()
 required('ASSEMBLYAI_API_KEY', 'get one at https://www.assemblyai.com/dashboard/api-keys')
 
-// AGENT_ID set means the agent is managed elsewhere, so use it as it is.
+// A published id means the agent is managed elsewhere, so use it as it is.
 const AGENT = await (async () => {
-  if (process.env.AGENT_ID) {
+  const name = process.env.AGENT || 'minimal'
+  const known = storedAgentId(name)
+  if (known) {
     try {
-      const agent = await aai(`/agents/${process.env.AGENT_ID}`)
-      return { id: process.env.AGENT_ID, name: agent.name || 'Your agent' }
+      const agent = await aai(`/agents/${known}`)
+      return { id: known, name: agent.name || 'Your agent' }
     } catch (error) {
-      console.error(`Could not load AGENT_ID ${process.env.AGENT_ID}: ${error.message}`)
+      console.error(`Could not load agent ${known}: ${error.message}`)
       process.exit(1)
     }
   }
-  const name = process.env.AGENT || 'minimal'
   const agent = readAgent(name)
   try {
-    const { id, created } = await publishAgent(agent, { reuseByName: true })
+    const { id, created } = await publishAgent(agent, { name, reuseByName: true })
     console.log(`${created ? 'Created' : 'Updated'} "${agent.name}" from agents/${name}.jsonc`)
     return { id, name: agent.name }
   } catch (error) {

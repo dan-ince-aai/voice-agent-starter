@@ -15,6 +15,7 @@ import {
   readAgent,
   reportErrors,
   required,
+  storedAgentId,
   twilio,
 } from '../../lib.mjs'
 
@@ -44,16 +45,16 @@ const CORE = `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_AC
 // customise.
 const SIP_URL = 'sip:sip.assemblyai.com'
 
-// 1. The agent. AGENT_ID means one already exists; otherwise publish the
-// config file now, which also writes the new id to .env.
-let agentId = process.env.AGENT_ID
+// 1. The agent. A published id means one already exists; otherwise publish the
+// file now, which also writes the new id to .env.
+const agentName = process.env.AGENT || 'minimal'
+let agentId = storedAgentId(agentName)
 if (agentId) {
-  console.log(`Agent: ${agentId} (from AGENT_ID)`)
+  console.log(`Agent: ${agentId} (already published)`)
 } else {
-  const name = process.env.AGENT || 'minimal'
-  const agent = readAgent(name)
-  agentId = (await publishAgent(agent)).id
-  console.log(`Agent: ${agentId}, published "${agent.name}" from agents/${name}.jsonc`)
+  const agent = readAgent(agentName)
+  agentId = (await publishAgent(agent, { name: agentName })).id
+  console.log(`Agent: ${agentId}, published "${agent.name}" from agents/${agentName}.jsonc`)
 }
 
 // 2. The number has to be one you already bought in Twilio.

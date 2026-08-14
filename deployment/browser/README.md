@@ -24,7 +24,7 @@ Edit the file in [agents/](../../agents/), run `npm run publish`, and start anot
 
 ## What it does
 
-Publishes `agents/<AGENT>.jsonc` on startup if `AGENT_ID` is unset, so a fresh clone works with only an API key.
+Publishes `agents/<AGENT>.jsonc` on startup if it has no id yet, so a fresh clone works with only an API key.
 
 `GET /token` proxies AssemblyAI's token endpoint using your key and returns a 60 second session token. The key is never sent to the page.
 
@@ -39,8 +39,9 @@ The session message contains only `{ agent_id }`. Prompt, voice, tools and turn 
 | | |
 | --- | --- |
 | `ASSEMBLYAI_API_KEY` | Required. Stays in this process. |
-| `AGENT_ID` | Connect to this agent as it is. Written by `npm run publish`. |
-| `AGENT` | Which file in `agents/` to publish when `AGENT_ID` is unset. Defaults to `minimal`. |
+| `AGENT` | Which file in `agents/` to serve. Defaults to `minimal`. |
+| `AGENT_ID_<NAME>` | The id `npm run publish` saved for that file. Connected to as it is. |
+| `AGENT_ID` | Overrides the per-file keys, for serving one specific agent. |
 | `PORT` | Defaults to 3000, moves to the next free port if taken. |
 
 ## Editing the page
@@ -51,6 +52,6 @@ Everything is in [server.mjs](server.mjs). The client is the `clientApp` functio
 
 `render.yaml` is configured for one-click deploys. Render prompts for `ASSEMBLYAI_API_KEY` during Blueprint creation, since that is the only variable marked `sync: false`, and sets `PORT` itself. `AGENT` and `AGENT_ID` arrive with defaults and are editable under Environment on the service.
 
-With `AGENT_ID` empty the service publishes `AGENT` on boot and updates the agent of that name on later restarts, so restarts do not pile up duplicate agents. Setting `AGENT_ID` to the id in your `.env` is still better: the deployment then serves the same agent you tested locally.
+With no id set the service publishes `AGENT` on boot and updates the agent of that name on later restarts, so restarts do not pile up duplicate agents. Setting `AGENT_ID` to the id from your `.env` is still better: the deployment then serves the same agent you tested locally.
 
 Anyone with the URL can start sessions billed to your key.

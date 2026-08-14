@@ -10,6 +10,7 @@
   "scripts": {
     "start": "node deployment/browser/server.mjs",
     "publish": "node publish.mjs",
+    "import": "node import.mjs",
     "phone": "node deployment/telephony/connect.mjs"
   }
 }

@@ -4,10 +4,10 @@
 //   npm run publish
 //   AGENT=exa-search npm run publish
 //
-// The first run creates the agent and writes AGENT_ID to .env. Every run
-// after that updates that same agent in place, so the id stays valid and
-// a browser tab or phone number pointed at it picks up the change on the
-// next call.
+// The first run creates the agent and writes AGENT_ID_<NAME> to .env. Every
+// run after that updates that same agent, so each file keeps its own agent and
+// a browser tab or phone number pointed at one picks up the change on the next
+// call.
 
 import { loadEnv, publishAgent, readAgent, reportErrors, required } from './lib.mjs'
 
@@ -17,12 +17,12 @@ required('ASSEMBLYAI_API_KEY', 'get one at https://www.assemblyai.com/dashboard/
 
 const name = process.env.AGENT || 'minimal'
 const agent = readAgent(name)
-const { id, created, saved } = await publishAgent(agent)
+const { id, created, saved, key } = await publishAgent(agent, { name })
 
 console.log(`${created ? 'Created' : 'Updated'} "${agent.name}" from agents/${name}.jsonc`)
-console.log(`AGENT_ID=${id}`)
+console.log(`${key}=${id}`)
 if (created && !saved) {
-  console.log('Could not write .env. Set AGENT_ID yourself to keep updating this agent.')
+  console.log(`Could not write .env. Set ${key} yourself to keep updating this agent.`)
 } else if (created) {
   console.log('Saved to .env.')
 }

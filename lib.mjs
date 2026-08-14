@@ -221,12 +221,22 @@ export async function aai(path, { method = 'GET', body, headers = {} } = {}) {
   }
 }
 
-// AGENT_ID in the environment decides create vs update: empty means POST a
-// new agent and remember the id it comes back with, set means PUT the config
-// over that agent. So the first publish creates one agent and every publish
-// after it edits the same one.
-export async function publishAgent(agent, { reuseByName = false } = {}) {
-  const id = process.env.AGENT_ID
+// Each agent file gets its own id, saved as AGENT_ID_<NAME>, so switching
+// files does not overwrite the agent the last one published. AGENT_ID with no
+// suffix overrides all of them, for an agent shaped in the dashboard or a
+// hosted deploy that serves one specific agent.
+export const agentIdKey = (name) => 'AGENT_ID_' + name.toUpperCase().replace(/[^A-Z0-9]/g, '_')
+
+export const storedAgentId = (name) =>
+  process.env.AGENT_ID || process.env[agentIdKey(name)] || ''
+
+// An id in the environment decides create vs update: absent means POST a new
+// agent and remember the id it comes back with, present means PUT the file
+// over that agent.
+export async function publishAgent(agent, { name, reuseByName = false } = {}) {
+  const key = agentIdKey(name)
+  const explicit = Boolean(process.env.AGENT_ID)
+  const id = storedAgentId(name)
   if (id) {
     try {
       // Publishing a different file over the same id replaces what that agent
@@ -236,12 +246,12 @@ export async function publishAgent(agent, { reuseByName = false } = {}) {
         console.log(`Note: agent ${id} was "${current.name}"`)
       }
       await aai(`/agents/${id}`, { method: 'PUT', body: agent })
-      return { id, created: false }
+      return { id, created: false, key }
     } catch (error) {
       // The id in .env points at an agent that is gone; fall through and
       // make a new one rather than dead-ending.
       if (!(error instanceof ApiError) || error.status !== 404) throw error
-      console.warn(`AGENT_ID ${id} no longer exists, creating a new agent`)
+      console.warn(`Agent ${id} no longer exists, creating a new one`)
     }
   }
   // A hosted server has no AGENT_ID and no writable .env, so without this it
@@ -253,12 +263,13 @@ export async function publishAgent(agent, { reuseByName = false } = {}) {
     const existing = (list.agents ?? []).find((a) => a.name === agent.name)
     if (existing) {
       await aai(`/agents/${existing.id}`, { method: 'PUT', body: agent })
-      return { id: existing.id, created: false, saved: saveEnv('AGENT_ID', existing.id) }
+      return { id: existing.id, created: false, saved: saveEnv(key, existing.id) }
     }
   }
   const created = await aai('/agents', { method: 'POST', body: agent })
-  const saved = saveEnv('AGENT_ID', created.id)
-  return { id: created.id, created: true, saved }
+  // An explicit AGENT_ID is the caller's choice, so it is not overwritten.
+  const saved = explicit ? false : saveEnv(key, created.id)
+  return { id: created.id, created: true, saved, key }
 }
 
 // --- Twilio ----------------------------------------------------------------
