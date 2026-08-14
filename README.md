@@ -12,7 +12,7 @@
 
 Voice agents defined as JSON files. Publish one to your AssemblyAI account, then talk to it in a browser tab or by calling a phone number.
 
-Each file in [agents/](agents/) is the request body for `POST /v1/agents`. The starter sends it unchanged, saves the agent ID it gets back to `.env`, and both deployments connect using that ID. Built on the [AssemblyAI Voice Agent API](https://www.assemblyai.com/products/voice-agent-api). Node 18 or later, no dependencies.
+Each file in [agents/](agents/) is the request body for `POST /v1/agents`. The starter sends it unchanged, saves the agent ID it gets back to `.env`, and both deployments connect using that ID. An agent you already have goes the other way, `npm run import <agent-id>` turns it into one of these files. Built on the [AssemblyAI Voice Agent API](https://www.assemblyai.com/products/voice-agent-api). Node 18 or later, no dependencies.
 
 There is a [Python version of this repo](https://github.com/dan-ince-aai/voice-agent-starter-python) with the same agents and the same steps.
 
@@ -35,22 +35,22 @@ From [assemblyai.com/dashboard/api-keys](https://www.assemblyai.com/dashboard/ap
 ASSEMBLYAI_API_KEY=your_key_here
 ```
 
-### 3. Publish an agent
+### 3. Get an agent
+
+Publish one of the examples:
 
 ```sh
 npm run publish                       # agents/minimal.jsonc
 # AGENT=http-tools npm run publish    # or any other file in agents/
 ```
 
-Writes `AGENT_ID_MINIMAL` back to `.env`. Later runs update that agent instead of creating another, and each file keeps its own agent, so switching with `AGENT=` never overwrites the last one.
-
-Already have an agent, from the playground or the dashboard? Pull it in instead:
+Or import one you already have, shaped in the playground or the dashboard:
 
 ```sh
-npm run import <agent-id>
+npm run import <agent-id>          # writes agents/<its-name>.jsonc
 ```
 
-That writes `agents/<its-name>.jsonc` from the live agent and records its id, so publishing later updates that same agent.
+Either way you end up with the same pair: a file in `agents/` and its id in `.env` as `AGENT_ID_<NAME>`. Publishing again updates that agent rather than creating another, and each file keeps its own, so switching with `AGENT=` never overwrites the last one.
 
 ### 4. Talk to it
 
@@ -103,6 +103,25 @@ npm start
 
 To write your own, copy the closest file: `cp agents/http-tools.jsonc agents/my-agent.jsonc`. Every field is commented, with a link to the documentation page that defines it.
 
+## Importing an agent
+
+The playground is the quickest way to shape an agent. This is how it moves into code without being rebuilt by hand:
+
+```sh
+npm run import 8f3c1e2a-...
+```
+
+It writes `agents/<name>.jsonc`, the live agent as a file, headed with the id it came from. It records `AGENT_ID_<NAME>` in `.env`, so `npm run publish` sends a `PUT` to that same agent instead of creating a second one. It drops `id`, `created_at` and `updated_at`, which are not part of a create request. And it refuses to overwrite an existing file unless you pass `AGENT=<other-name>` or `OVERWRITE=1`.
+
+Credentials are the one thing it cannot recover. Tool header values and `llm[].api_key` are write-only on the API, so they come back blank. The import names the ones to restore, and they belong in `.env`, referenced from the file as `${VARS}`:
+
+```
+Header values are write-only and did not come back for: lookup.
+Put them in .env and reference them as ${VARS}.
+```
+
+From there it behaves like any other file in `agents/`: edit it, publish, call.
+
 ## Where it answers
 
 | | | |
@@ -131,6 +150,10 @@ Anyone with the URL can start sessions billed to that key.
 ## How it works
 
 ```
+  copy an example                     npm run import <id>
+  or write your own                   an agent you already have
+           │                                   │
+           ▼                                   ▼
 agents/exa-search.jsonc     body of POST /v1/agents
         + .env              the ${VARS} it references
            │
