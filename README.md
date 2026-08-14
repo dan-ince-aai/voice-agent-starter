@@ -38,10 +38,11 @@ ASSEMBLYAI_API_KEY=your_key_here
 ### 3. Publish an agent
 
 ```sh
-npm run publish
+npm run publish                       # agents/minimal.jsonc
+# AGENT=http-tools npm run publish    # or any other file in agents/
 ```
 
-Publishes `agents/minimal.jsonc` and writes `AGENT_ID` back to `.env`. Later runs update that agent instead of creating another. For any other file: `AGENT=http-tools npm run publish`.
+Writes `AGENT_ID` back to `.env`. Later runs update that agent instead of creating another.
 
 ### 4. Talk to it
 
