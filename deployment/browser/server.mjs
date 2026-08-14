@@ -47,35 +47,169 @@ console.log(`Agent: ${AGENT.id}`)
 // here is what the page runs.
 function clientApp() {
 const $ = (id) => document.getElementById(id)
-const RATE = 24_000
+// The rate the API speaks. Both worklets resample to and from it, because a
+// browser is allowed to ignore the sample rate an AudioContext asks for.
+const WIRE_RATE = 24_000
 const AGENT = window.AGENT
 
-// Captures the mic as PCM16 and posts it to the main thread.
-const workletUrl = URL.createObjectURL(new Blob([`
-  class P extends AudioWorkletProcessor {
+// Reads the mic, resamples to the wire rate, and posts PCM16 to the main
+// thread. Allocations on the audio thread cause glitches, so the scratch
+// buffers are reused and only the transferred buffer is per block.
+const CAPTURE_WORKLET = `
+  class CaptureProcessor extends AudioWorkletProcessor {
+    constructor() {
+      super();
+      this._ratio = sampleRate / ${WIRE_RATE};
+      this._pos = 0;
+      this._prev = 0;
+      this._src = null;
+      this._out = null;
+    }
+    _toPcm(samples, len) {
+      const pcm = new Int16Array(len);
+      for (let i = 0; i < len; i++) {
+        const s = Math.max(-1, Math.min(1, samples[i]));
+        pcm[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+      }
+      return pcm;
+    }
     process(inputs) {
       const ch = inputs[0]?.[0];
-      if (ch) {
-        const buf = new Int16Array(ch.length);
-        for (let i = 0; i < ch.length; i++)
-          buf[i] = Math.max(-32768, Math.min(32767, ch[i] * 32767));
-        this.port.postMessage(buf.buffer, [buf.buffer]);
+      if (!ch) return true;
+      if (this._ratio === 1) {
+        const pcm = this._toPcm(ch, ch.length);
+        this.port.postMessage(pcm.buffer, [pcm.buffer]);
+        return true;
+      }
+      const n = ch.length;
+      if (!this._src || this._src.length < n + 1) {
+        this._src = new Float32Array(n + 1);
+        this._out = new Float32Array(Math.ceil((n + 1) / this._ratio) + 2);
+      }
+      const src = this._src;
+      const out = this._out;
+      src[0] = this._prev;
+      src.set(ch, 1);
+      let outLen = 0;
+      let pos = this._pos;
+      while (pos < n) {
+        const i = Math.floor(pos);
+        const frac = pos - i;
+        out[outLen++] = src[i] + (src[i + 1] - src[i]) * frac;
+        pos += this._ratio;
+      }
+      this._pos = pos - n;
+      this._prev = ch[n - 1];
+      if (outLen) {
+        const pcm = this._toPcm(out, outLen);
+        this.port.postMessage(pcm.buffer, [pcm.buffer]);
       }
       return true;
     }
   }
-  registerProcessor("pcm", P);
-`], { type: 'application/javascript' }))
+  registerProcessor('capture', CaptureProcessor);
+`
 
-let ws, ctx, mic, callStart, timer
+// Plays reply audio out of a ring buffer. Scheduling one AudioBufferSource per
+// arriving chunk drifts and clicks when the network jitters; a ring buffer the
+// audio thread drains at its own pace does not. Posting 'stop' empties it,
+// which is how barge-in cuts the agent off mid-word.
+const PLAYBACK_WORKLET = `
+  class PlaybackProcessor extends AudioWorkletProcessor {
+    constructor() {
+      super();
+      this._ring = new Float32Array(sampleRate * 30);
+      this._writePos = 0;
+      this._readPos = 0;
+      this._available = 0;
+      this._step = ${WIRE_RATE} / sampleRate;
+      this._rsPos = 0;
+      this._rsPrev = 0;
+      // Set when the buffer runs dry. The speaker is then sitting at zero
+      // while _rsPrev still holds the sample from before the gap, so
+      // interpolating from it on the next chunk steps straight to that value
+      // and clicks. Reset instead.
+      this._drained = false;
+      this.port.onmessage = (e) => {
+        if (e.data === 'stop') {
+          this._writePos = this._readPos = this._available = 0;
+          this._rsPos = this._rsPrev = 0;
+          return;
+        }
+        const int16 = new Int16Array(e.data);
+        // An empty frame would leave _rsPrev as int16[-1], and one NaN in the
+        // ring silences everything after it.
+        if (!int16.length) return;
+        if (this._drained) {
+          this._rsPrev = 0;
+          this._rsPos = 0;
+          this._drained = false;
+        }
+        if (this._step === 1) {
+          for (let i = 0; i < int16.length; i++) this._push(int16[i] / 32768);
+          return;
+        }
+        const n = int16.length;
+        let pos = this._rsPos;
+        while (pos < n) {
+          const i = Math.floor(pos);
+          const frac = pos - i;
+          const a = i === 0 ? this._rsPrev : int16[i - 1] / 32768;
+          const b = int16[i] / 32768;
+          this._push(a + (b - a) * frac);
+          pos += this._step;
+        }
+        this._rsPos = pos - n;
+        this._rsPrev = int16[n - 1] / 32768;
+      };
+    }
+    _push(v) {
+      if (this._available < this._ring.length) {
+        this._ring[this._writePos] = v;
+        this._writePos = (this._writePos + 1) % this._ring.length;
+        this._available++;
+      }
+    }
+    process(inputs, outputs) {
+      const output = outputs[0];
+      const out = output[0];
+      const cap = this._ring.length;
+      for (let i = 0; i < out.length; i++) {
+        if (this._available > 0) {
+          out[i] = this._ring[this._readPos];
+          this._readPos = (this._readPos + 1) % cap;
+          this._available--;
+        } else {
+          out[i] = 0;
+          this._drained = true;
+        }
+      }
+      // Mono source, stereo sink: copy into the other channels so one ear
+      // isn't silent.
+      for (let ch = 1; ch < output.length; ch++) output[ch].set(out);
+      return true;
+    }
+  }
+  registerProcessor('playback', PlaybackProcessor);
+`
+
+const blobUrl = (code) =>
+  URL.createObjectURL(new Blob([code], { type: 'application/javascript' }))
+
+let ws, captureCtx, playbackCtx, playback, mic, callStart, timer
 
 // --- microphones ---
-// Labels are empty until the user grants permission, so this runs again after
-// getUserMedia and whenever a device is plugged in.
+// Labels stay empty until the page has held mic permission once, so this runs
+// again after getUserMedia and on every device change.
 async function listMics() {
   if (!navigator.mediaDevices?.enumerateDevices) return
   const devices = await navigator.mediaDevices.enumerateDevices()
-  const inputs = devices.filter((device) => device.kind === 'audioinput')
+  const inputs = devices
+    .filter((device) => device.kind === 'audioinput')
+    // Chrome reports synthetic "default" and "communications" entries that
+    // point at whichever real device is current, which shows the same
+    // microphone twice. The explicit option below covers that case.
+    .filter((device) => device.deviceId !== 'default' && device.deviceId !== 'communications')
   const select = $('mic')
   const chosen = select.value
   select.replaceChildren()
@@ -100,6 +234,16 @@ $('log-toggle').onclick = () => {
   $('log-toggle').textContent = hidden ? 'Show' : 'Hide'
 }
 
+async function addWorklet(ctx, code, name) {
+  const url = blobUrl(code)
+  try {
+    await ctx.audioWorklet.addModule(url)
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+  return new AudioWorkletNode(ctx, name)
+}
+
 async function start() {
   $('btn').disabled = true
   $('mic').disabled = true
@@ -115,39 +259,50 @@ async function start() {
     }
     const { token } = await res.json()
 
-    ctx = new AudioContext({ sampleRate: RATE })
-    await ctx.resume()
-    await ctx.audioWorklet.addModule(workletUrl)
+    // Two contexts: capture can be torn down without touching playback, and
+    // a stall in one does not stall the other. Created inside the click
+    // handler so Safari allows them to start.
+    captureCtx = new AudioContext({ sampleRate: WIRE_RATE })
+    playbackCtx = new AudioContext({ sampleRate: WIRE_RATE })
+    await Promise.all([captureCtx.resume(), playbackCtx.resume()])
+
+    playback = await addWorklet(playbackCtx, PLAYBACK_WORKLET, 'playback')
+    playback.connect(playbackCtx.destination)
+
     const deviceId = $('mic').value
     mic = await navigator.mediaDevices.getUserMedia({
       audio: {
+        // A plain deviceId is a preference, so an unplugged headset falls
+        // back to the default input instead of throwing.
+        ...(deviceId ? { deviceId } : {}),
+        channelCount: 1,
         echoCancellation: true,
         noiseSuppression: false,
         autoGainControl: false,
-        ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
       },
     })
-    // Device labels are only readable once permission is granted.
+    // Device labels only become readable once permission is granted.
     listMics()
-    const source = ctx.createMediaStreamSource(mic)
-    const worklet = new AudioWorkletNode(ctx, 'pcm')
+    const capture = await addWorklet(captureCtx, CAPTURE_WORKLET, 'capture')
+    captureCtx.createMediaStreamSource(mic).connect(capture)
 
     const url = new URL('wss://agents.assemblyai.com/v1/ws')
     url.searchParams.set('token', token)
     ws = new WebSocket(url)
     let ready = false
-    let playAt = 0
-    const scheduled = []
 
-    worklet.port.onmessage = ({ data }) => {
+    // The API takes audio as base64 inside JSON, so each block is encoded
+    // here rather than sent as a binary frame.
+    capture.port.onmessage = ({ data }) => {
       if (!ready || ws.readyState !== 1) return
       const bytes = new Uint8Array(data)
       let binary = ''
-      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+      for (let i = 0; i < bytes.length; i += 0x8000) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000))
+      }
       ws.send(JSON.stringify({ type: 'input.audio', audio: btoa(binary) }))
       logEvent('up', 'input.audio')
     }
-    source.connect(worklet).connect(ctx.destination)
 
     // Everything about the agent lives server-side; the session just names it.
     ws.onopen = () => {
@@ -171,13 +326,9 @@ async function start() {
           break
 
         case 'input.speech.started':
-          // Barge-in: drop queued agent audio the moment the caller speaks.
+          // Barge-in: empty the ring buffer so the agent stops mid-word.
+          playback?.port.postMessage('stop')
           setStatus('listening')
-          scheduled.forEach((src) => {
-            try { src.stop() } catch {}
-          })
-          scheduled.length = 0
-          playAt = ctx.currentTime
           logEvent('down', msg.type)
           break
 
@@ -188,30 +339,16 @@ async function start() {
 
         case 'reply.audio': {
           const raw = atob(msg.data)
-          const pcm = new Int16Array(raw.length / 2)
-          for (let i = 0; i < pcm.length; i++)
-            pcm[i] = raw.charCodeAt(i * 2) | (raw.charCodeAt(i * 2 + 1) << 8)
-          const buffer = ctx.createBuffer(1, pcm.length, RATE)
-          const channel = buffer.getChannelData(0)
-          for (let i = 0; i < pcm.length; i++) channel[i] = pcm[i] / 32768
-          const src = ctx.createBufferSource()
-          src.buffer = buffer
-          src.connect(ctx.destination)
-          playAt = Math.max(playAt, ctx.currentTime)
-          src.start(playAt)
-          playAt += buffer.duration
-          scheduled.push(src)
-          src.onended = () => {
-            const i = scheduled.indexOf(src)
-            if (i >= 0) scheduled.splice(i, 1)
-          }
+          const bytes = new Uint8Array(raw.length)
+          for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i)
+          playback?.port.postMessage(bytes.buffer, [bytes.buffer])
           logEvent('down', msg.type)
           break
         }
 
         case 'reply.done':
           setStatus('listening')
-          if (msg.status === 'interrupted') playAt = ctx.currentTime
+          if (msg.status === 'interrupted') playback?.port.postMessage('stop')
           logEvent('down', msg.type, msg.status)
           break
 
@@ -281,9 +418,11 @@ function stop() {
   } else {
     ws?.close()
   }
+  playback?.port.postMessage('stop')
   mic?.getTracks().forEach((track) => track.stop())
-  ctx?.close()
-  ctx = mic = null
+  captureCtx?.close()
+  playbackCtx?.close()
+  captureCtx = playbackCtx = playback = mic = null
   reset()
   setStatus('idle')
 }
@@ -291,6 +430,9 @@ function stop() {
 function reset() {
   clearInterval(timer)
   clearPartials()
+  // Close any counting rows so the next call starts new ones.
+  open.forEach((run) => paint(run, true))
+  open.clear()
   $('btn').disabled = false
   $('mic').disabled = false
   $('btn').textContent = 'Start call'
@@ -368,26 +510,19 @@ function clearPartials() {
 }
 
 // --- event log ---
-// Every frame in both directions. Audio and partials arrive many times a
-// second, so repeats of one type collapse into a counter instead of flooding.
+// Audio frames arrive around 190 times a second in each direction, so logging
+// one row each would bury everything worth reading. These types instead hold a
+// row open and count into it. Both directions stream at once, so a row is kept
+// per direction and type rather than merging only with the row above.
 const COALESCE = new Set([
   'input.audio',
   'reply.audio',
   'transcript.user.delta',
   'transcript.agent.delta',
 ])
-let lastEvent = null
+const open = new Map()
 
-function logEvent(direction, type, detail) {
-  const log = $('events-body')
-  clearEmpty(log)
-  if (lastEvent && lastEvent.type === type && lastEvent.direction === direction && COALESCE.has(type)) {
-    lastEvent.count += 1
-    lastEvent.el.querySelector('.count').textContent = '\u00d7' + lastEvent.count
-    if (detail) lastEvent.el.querySelector('.detail').textContent = detail
-    scroll(log)
-    return
-  }
+function eventRow(direction, type, detail) {
   const row = document.createElement('div')
   row.className = 'event ' + direction
   const at = document.createElement('span')
@@ -395,7 +530,7 @@ function logEvent(direction, type, detail) {
   at.textContent = (callStart ? (Date.now() - callStart) / 1000 : 0).toFixed(1) + 's'
   const arrow = document.createElement('span')
   arrow.className = 'dir'
-  arrow.textContent = direction === 'up' ? '\u2191' : '\u2193'
+  arrow.textContent = direction === 'up' ? '↑' : '↓'
   const name = document.createElement('span')
   name.className = 'type'
   name.textContent = type
@@ -405,10 +540,43 @@ function logEvent(direction, type, detail) {
   info.className = 'detail'
   if (detail) info.textContent = detail
   row.append(at, arrow, name, count, info)
+  return row
+}
+
+// Repainting on every frame is wasted work, so a counter updates at most ten
+// times a second and once more when the run ends.
+function paint(live, final) {
+  const now = performance.now()
+  if (!final && now - live.painted < 100) return
+  live.painted = now
+  live.row.querySelector('.count').textContent = live.count > 1 ? '×' + live.count : ''
+  if (live.detail) live.row.querySelector('.detail').textContent = live.detail
+}
+
+function logEvent(direction, type, detail) {
+  const log = $('events-body')
+  clearEmpty(log)
+  const key = direction + ' ' + type
+  const live = open.get(key)
+  if (live) {
+    live.count += 1
+    if (detail) live.detail = detail
+    paint(live)
+    return
+  }
+  // Anything that is not audio ends the runs above it, so the next burst
+  // starts a fresh row and the log reads in order.
+  if (!COALESCE.has(type)) {
+    open.forEach((run) => paint(run, true))
+    open.clear()
+  }
+  // Only follow the tail if the reader is already there.
+  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40
+  const row = eventRow(direction, type, detail)
   log.append(row)
-  while (log.children.length > 500) log.firstChild.remove()
-  lastEvent = { type, direction, count: 1, el: row }
-  scroll(log)
+  while (log.children.length > 400) log.firstChild.remove()
+  if (COALESCE.has(type)) open.set(key, { row, count: 1, detail, painted: 0 })
+  if (atBottom) scroll(log)
 }
 }
 
@@ -482,10 +650,11 @@ const HTML = `<!DOCTYPE html>
   .line.tool .said { word-break: break-all; }
 
   #events-body { font-family: var(--mono); font-size: .6875rem; line-height: 1.7; }
-  .event { display: flex; gap: .5rem; align-items: baseline; }
+  .event { display: flex; gap: .5rem; align-items: baseline; white-space: nowrap; }
   .event .at { color: var(--faint); min-width: 2.75rem; text-align: right;
                flex-shrink: 0; }
   .event .dir, .event .count { color: var(--faint); flex-shrink: 0; }
+  .event .count:empty, .event .detail:empty { display: none; }
   .event .type { flex-shrink: 0; }
   .event.up .type { color: var(--muted); }
   .event .detail { color: var(--faint); overflow: hidden; white-space: nowrap;
