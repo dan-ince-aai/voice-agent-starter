@@ -48,4 +48,4 @@ Node 18+, no installs. Agents: `minimal`, `keyterms`, `turn-taking`, `byo-llm`, 
 
 ## Deploying
 
-`render.yaml` and `railway.json` run the browser deployment; both platforms set `PORT` and prompt for `ASSEMBLYAI_API_KEY`. Set `AGENT_ID` there so the deploy connects to a published agent instead of creating its own. Anyone with the deployed URL, or the phone number, runs sessions billed to that key.
+`render.yaml` runs the browser deployment; Render sets `PORT` and prompts for `ASSEMBLYAI_API_KEY`. Set `AGENT_ID` there so the deploy connects to a published agent instead of creating its own. Anyone with the deployed URL, or the phone number, runs sessions billed to that key.

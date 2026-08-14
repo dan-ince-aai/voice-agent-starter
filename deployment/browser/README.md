@@ -45,4 +45,4 @@ It's one file: [server.mjs](server.mjs). The client is the `clientApp` function,
 
 ## Hosting it
 
-`render.yaml` and `railway.json` are wired up. Set `AGENT_ID` there too, so the deploy connects to your published agent instead of creating its own copy. Anyone with the URL can start sessions billed to your key.
+`render.yaml` is wired up. Set `AGENT_ID` there too, so the deploy connects to your published agent instead of creating its own copy. Anyone with the URL can start sessions billed to your key.
