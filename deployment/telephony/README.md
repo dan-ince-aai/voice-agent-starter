@@ -5,8 +5,8 @@ Attaches your agent to a phone number you own in Twilio. Twilio passes inbound c
 ## 1. Clone
 
 ```sh
-git clone https://github.com/dan-ince-aai/voice-agent-starter
-cd voice-agent-starter
+git clone https://github.com/dan-ince-aai/voice-agent-starter-js
+cd voice-agent-starter-js
 ```
 
 ## 2. Add credentials

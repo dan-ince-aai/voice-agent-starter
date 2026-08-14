@@ -21,8 +21,8 @@ There is a [Python version of this repo](https://github.com/dan-ince-aai/voice-a
 ### 1. Clone
 
 ```sh
-git clone https://github.com/dan-ince-aai/voice-agent-starter
-cd voice-agent-starter
+git clone https://github.com/dan-ince-aai/voice-agent-starter-js
+cd voice-agent-starter-js
 cp .env.example .env
 ```
 
@@ -106,7 +106,7 @@ Twilio passes the call to AssemblyAI over SIP, so nothing in this repo sits in t
 
 ## Hosting the browser app
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/dan-ince-aai/voice-agent-starter)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/dan-ince-aai/voice-agent-starter-js)
 
 Render reads [render.yaml](render.yaml) and prompts for exactly one value, `ASSEMBLYAI_API_KEY`, because that is the only variable marked `sync: false`. It sets `PORT` itself. The other two arrive with defaults you can change under Environment on the service:
 
