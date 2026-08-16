@@ -1,6 +1,6 @@
 # Working on this repo
 
-A dependency-free Node starter for the AssemblyAI Voice Agent API. There is a [Python version](https://github.com/dan-ince-aai/voice-agent-starter-python) that mirrors it, and `deployment/browser/app.js` there is copied from the client in this repo, so audio and transcript fixes land here first. An agent is one file in `agents/`; `publish.mjs` pushes it to the account; the two front doors in `deployment/` decide where it answers.
+A dependency-free Node starter for the AssemblyAI Voice Agent API. There is a [Python version](https://github.com/AssemblyAI/voice-agent-starter-python) that mirrors it, and `deployment/browser/app.js` there is copied from the client in this repo, so audio and transcript fixes land here first. An agent is one file in `agents/`; `publish.mjs` pushes it to the account; the two front doors in `deployment/` decide where it answers.
 
 ```
 agents/<name>.jsonc        the agent, as the body of POST /v1/agents
